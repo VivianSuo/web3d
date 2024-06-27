@@ -32,7 +32,8 @@ let renderer,
   gui,
   raycaster,
   animateId,
-  selectedNode;
+  selectedNode,
+  currentModel;
 let activeObjects = new Set();
 export default {
   name: "HelloWorld",
@@ -108,6 +109,7 @@ export default {
       // gui: null,
       modelType: "all",
       showLine: "yes",
+      guiParams: {},
       // outlinePass: null,
     };
   },
@@ -135,7 +137,7 @@ export default {
     },
     initGUI() {
       gui = new GUI();
-      const params = {
+      this.params = {
         fov: camera.fov,
         near: camera.near,
         far: camera.far,
@@ -146,24 +148,25 @@ export default {
         modelType: this.modelType,
         showLine: true,
         openEvent: false,
+        reset: false,
       };
-      gui.add(params, "fov", 0, 180).onChange((fov) => {
+      gui.add(this.params, "fov", 0, 180).onChange((fov) => {
         camera.setFocalLength(fov);
       });
-      gui.add(params, "x").onChange((x) => {
+      gui.add(this.params, "x").onChange((x) => {
         camera.position.x = x;
       });
-      gui.add(params, "y").onChange((y) => {
+      gui.add(this.params, "y").onChange((y) => {
         camera.position.y = y;
       });
-      gui.add(params, "z").onChange((z) => {
+      gui.add(this.params, "z").onChange((z) => {
         camera.position.z = z;
       });
-      gui.add(params, "modelZ").onChange((modelZ) => {
+      gui.add(this.params, "modelZ").onChange((modelZ) => {
         groupOfAllModels.position.z = modelZ;
       });
       gui
-        .add(params, "modelType", [
+        .add(this.params, "modelType", [
           "all",
           "proGroup",
           "project",
@@ -173,7 +176,7 @@ export default {
         .onChange((type) => {
           this.modelType = type;
         });
-      gui.add(params, "showLine").onChange((showLine) => {
+      gui.add(this.params, "showLine").onChange((showLine) => {
         if (showLine) {
           scene.traverseVisible((object) => {
             if (object.name.includes("line")) {
@@ -188,12 +191,29 @@ export default {
           });
         }
       });
-      gui.add(params, "openEvent").onChange((openEvent) => {
+      gui.add(this.params, "openEvent").onChange((openEvent) => {
         if (openEvent) {
           this.$refs.webglDom.removeEventListener("click", this.mouseClick);
           this.$refs.webglDom.addEventListener("click", this.mouseClick);
         } else {
           this.$refs.webglDom.removeEventListener("click", this.mouseClick);
+        }
+      });
+      gui.add(this.params, "reset").onChange((reset) => {
+        if (reset) {
+          scene.traverseVisible((object) => {
+            if (object.name.includes("boll")) {
+              object.material.opacity = 0.2;
+              object.material.color.set(0xffffff);
+            }
+            if (object.name.includes("inner")) {
+              object.material.opacity = 1;
+            }
+            if (object.name.includes("line")) {
+              object.material.opacity = 0.2;
+            }
+            currentModel.visible = false;
+          });
         }
       });
       gui.open();
@@ -250,6 +270,7 @@ export default {
       this.createGroup();
       this.createFoundationModel();
       this.createCenterAxis();
+      currentModel = this.createUpgradeBollModel("#CB5238");
       groupOfAllModels.position.z = -0.8;
       scene.add(groupOfAllModels);
     },
@@ -683,16 +704,25 @@ export default {
       return group;
     },
     // 升级版球
-    createUpgradeBollModel(_color, radius) {
-      let bollR = 0.08;
-      let color = new THREE.Color(0xff11ef);
+    createUpgradeBollModel(color, radius) {
+      let bollR = 0.04;
+      // let color = new THREE.color(_color);
       const upgradeBollModel = new THREE.Group();
       // 中间球
       const bollGeometry = new THREE.SphereGeometry(bollR, 32, 16);
       const material = new THREE.MeshPhongMaterial({
-        color: color,
+        color: new THREE.Color(color),
+        emissive: new THREE.Color(color),
+        transparent: true,
+        opacity: 1,
+        colorWrite: true,
       });
       const upgradeBoll = new THREE.Mesh(bollGeometry, material);
+      // const outerGeometry = new THREE.SphereGeometry(bollR * 1.01, 32, 16);
+      // const outerMaterial = new THREE.MeshBasicMaterial({
+      //   opacity: 0,
+      // });
+      // const outerBoll = new THREE.Mesh(outerGeometry, outerMaterial);
       // 外侧环
       for (var i = 0; i < 4; i++) {
         let outerModel = this.createUpgradeBollOuter(
@@ -707,7 +737,10 @@ export default {
         upgradeBollModel.add(outerModel);
       }
       upgradeBollModel.add(upgradeBoll);
-      upgradeBollModel.position.set(-1, 0, 0);
+      // upgradeBollModel.add(outerBoll);
+      upgradeBollModel.name = "upgradeBoll";
+      upgradeBollModel.position.set(0.5, 0.5, 0.5);
+      upgradeBollModel.visible = false;
       groupOfAllModels.add(upgradeBollModel);
       return upgradeBollModel;
     },
@@ -716,9 +749,11 @@ export default {
       const outCircleModel = new THREE.Group();
       outCircleModel.name = name;
       const circleGeometry = new THREE.TorusGeometry(radius, tube, 16, 100);
-      const circleMaterial = new THREE.MeshLambertMaterial({
-        color: new THREE.Color(0x1ae34c),
-        // transparent: true,
+      const circleMaterial = new THREE.MeshPhongMaterial({
+        color: new THREE.Color(color),
+        emissive: new THREE.Color(color),
+        transparent: true,
+        colorWrite: true,
         // opacity: 0.5,
       });
       let circleModle = new THREE.Mesh(circleGeometry, circleMaterial);
@@ -729,7 +764,9 @@ export default {
         16
       );
       const revolvingBollMaterial = new THREE.MeshPhongMaterial({
-        color: new THREE.Color(0x1ae34c),
+        color: new THREE.Color(color),
+        emissive: new THREE.Color(color),
+        transparent: true,
       });
       let revolvingBollModel = new THREE.Mesh(
         revolvingBollGeometry,
@@ -808,6 +845,25 @@ export default {
       });
       if (ifBoll) {
         selectedNode = ifBoll.object;
+        let selectedNodeGroup = selectedNode.parent;
+        let { x, y } = selectedNodeGroup.position;
+        let selectedNodeOfTypeGroup = selectedNodeGroup.parent;
+        let { z } = selectedNodeOfTypeGroup.position;
+        currentModel.position.x = x;
+        currentModel.position.y = y;
+        currentModel.position.z = z;
+        let currentModelColor = this.nodeColors.get(
+          selectedNode.userData.config.cluster
+        );
+        currentModel.traverseVisible((child) => {
+          if (child.type === "Mesh") {
+            console.log("child", child);
+            child.material.color.set(new THREE.Color(currentModelColor));
+            child.material.emissive.set(new THREE.Color(currentModelColor));
+          }
+        });
+        currentModel.visible = true;
+        // currentModel.material.color.set(currentModelColor);
         scene.traverseVisible((object) => {
           if (object.name.includes("boll")) {
             object.material.opacity = 0.3;
@@ -835,25 +891,21 @@ export default {
           }
         });
       } else {
-        scene.traverseVisible((object) => {
-          if (object.name.includes("boll")) {
-            object.material.opacity = 0.2;
-            object.material.color.set(0xffffff);
-          }
-          if (object.name.includes("inner")) {
-            object.material.opacity = 1;
-          }
-          if (object.name.includes("line")) {
-            object.material.opacity = 0.2;
-          }
-        });
+        // scene.traverseVisible((object) => {
+        //   if (object.name.includes("boll")) {
+        //     object.material.opacity = 0.2;
+        //     object.material.color.set(0xffffff);
+        //   }
+        //   if (object.name.includes("inner")) {
+        //     object.material.opacity = 1;
+        //   }
+        //   if (object.name.includes("line")) {
+        //     object.material.opacity = 0.2;
+        //   }
+        // });
       }
       activeObjects.clear();
       selectedNode = null;
-      // if (intersects.length) {
-      //   console.log("点击的节点是", intersects);
-
-      // }
     },
     getRelevanceModels(model, type) {
       if (!model || activeObjects.has(model)) {
@@ -863,11 +915,6 @@ export default {
       let originalCluster = selectedNode.userData.config.cluster;
       let selectedNodeRelationId = selectedNode.userData.config.relationId;
       let selectedNodeLayer = selectedNode.userData.config.layer;
-      console.log("originalCluster", originalCluster);
-      // console.log("cluster", cluster);
-      console.log("size", activeObjects.size);
-      console.log("addModel", model);
-
       if (type === "node") {
         let cluster = config.cluster;
         if (
