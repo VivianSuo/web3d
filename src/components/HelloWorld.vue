@@ -47,6 +47,8 @@ export default {
       bollsModel: [], // 球
       foundationModel: null, // 基座
       defaultEleColor: 0x2a81ff,
+      defaultCircleTube: 0.004,
+      defaultCircleOpacity: 0.3,
       foundationModelStyle: {
         xRadius: 1,
         color: this.defaultEleColor,
@@ -485,12 +487,17 @@ export default {
     },
     // 圈
     createCircleModel(radius) {
-      const geometry = new THREE.TorusGeometry(radius, 0.002, 16, 100);
+      const geometry = new THREE.TorusGeometry(
+        radius,
+        this.defaultCircleTube,
+        16,
+        100
+      );
       const material = new THREE.MeshLambertMaterial({
         color: this.colorTool.set(this.defaultEleColor),
         emissive: this.colorTool.set(this.defaultEleColor),
         transparent: true,
-        opacity: 0.5,
+        opacity: this.defaultCircleOpacity,
       });
       const circleModel = new THREE.Mesh(geometry, material);
       return circleModel;
@@ -517,12 +524,17 @@ export default {
     async createRingModel(radius) {
       const color = 0x2a81ff;
       const group = new THREE.Group();
-      const circle = new THREE.TorusGeometry(radius, 0.002, 16, 100);
+      const circle = new THREE.TorusGeometry(
+        radius,
+        this.defaultCircleTube,
+        16,
+        100
+      );
       const circleMaterial = new THREE.MeshLambertMaterial({
         color: this.colorTool.set(color),
         emissive: this.colorTool.set(color),
         transparent: true,
-        opacity: 0.5,
+        opacity: this.defaultCircleOpacity,
       });
       const circleModel = new THREE.Mesh(circle, circleMaterial);
 
@@ -530,8 +542,8 @@ export default {
       let ringRadius = radius + 0.03;
 
       const ring = new THREE.RingGeometry(
-        radius + 0.03,
-        ringRadius + 0.03,
+        radius - 0.05,
+        ringRadius - 0.05,
         100
       );
       const textureLoader = new THREE.TextureLoader();
@@ -644,6 +656,8 @@ export default {
       const innerMaterial = new THREE.MeshPhongMaterial({
         emissive: new THREE.Color(color),
         color: new THREE.Color(color),
+        transparent: true,
+        opacity: 1,
         // emissiveIntensity: 0.5,
       });
       const innerSphere = new THREE.Mesh(geometry, innerMaterial);
@@ -796,7 +810,11 @@ export default {
         selectedNode = ifBoll.object;
         scene.traverseVisible((object) => {
           if (object.name.includes("boll")) {
-            object.material.opacity = 0.7;
+            object.material.opacity = 0.3;
+            object.material.color.set(0x000);
+          }
+          if (object.name.includes("inner")) {
+            object.material.opacity = 0.2;
           }
           if (object.name.includes("line")) {
             object.material.opacity = 0.2;
@@ -806,6 +824,10 @@ export default {
         activeObjects.forEach((object) => {
           if (object.name.includes("boll")) {
             object.material.opacity = 0.1;
+            object.material.color.set(0xffffff);
+            let innerObjectName = `inner_${object.userData.config.relationId}`;
+            let innerObject = scene.getObjectByName(innerObjectName);
+            innerObject.material.opacity = 1;
           } else {
             object.material.opacity = 1;
             object.material.color.set("#38B7FF");
@@ -815,7 +837,11 @@ export default {
       } else {
         scene.traverseVisible((object) => {
           if (object.name.includes("boll")) {
-            object.material.opacity = 0.3;
+            object.material.opacity = 0.2;
+            object.material.color.set(0xffffff);
+          }
+          if (object.name.includes("inner")) {
+            object.material.opacity = 1;
           }
           if (object.name.includes("line")) {
             object.material.opacity = 0.2;
