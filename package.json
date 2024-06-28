@@ -1,15 +1,16 @@
 {
-  "name": "web3d-demo",
+  "name": "hello-world",
   "version": "1.0.0",
   "description": "A Vue.js project",
   "author": "suoyuwen <yuwen2021@iscas.ac.cn>",
   "private": true,
   "scripts": {
-    "dev": "webpack-dev-server --inline --progress --config build/webpack.dev.conf.js --host 0.0.0.0",
+    "dev": "webpack-dev-server --inline --progress --config build/webpack.dev.conf.js ",
     "start": "npm run dev",
     "build": "node build/build.js"
   },
   "dependencies": {
+    "axios": "^0.19.0",
     "stats.js": "^0.17.0",
     "three": "^0.128.0",
     "three-orbitcontrols-ts": "^0.1.2",

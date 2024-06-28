@@ -5,7 +5,7 @@
 </template>
 
 <script>
-import result from "../mock/data";
+// import result from "../mock/data";
 // 记得及时dispose相应的对象来释放内存占用。
 import * as THREE from "three";
 import * as Stats from "stats.js";
@@ -20,11 +20,12 @@ import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass.js";
 import { BloomPass } from "three/examples/jsm/postprocessing/BloomPass.js";
 import { SSAARenderPass } from "three/examples/jsm/postprocessing/SSAARenderPass.js";
 // import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-
+const axiosPre = "http://172.16.20.33:8087";
 let renderer,
   scene,
   camera,
   groupOfAllModels,
+  foundationModel,
   controler,
   composer,
   outlinePass,
@@ -33,8 +34,8 @@ let renderer,
   raycaster,
   animateId,
   selectedNode,
-  currentModel;
-let activeObjects = new Set();
+  currentModel,
+  activeObjects;
 export default {
   name: "HelloWorld",
   data() {
@@ -46,7 +47,7 @@ export default {
       circleModel: null, // 圈
       ringModel: null, // 环
       bollsModel: [], // 球
-      foundationModel: null, // 基座
+      // foundationModel: null, // 基座
       defaultEleColor: 0x2a81ff,
       defaultCircleTube: 0.004,
       defaultCircleOpacity: 0.3,
@@ -110,24 +111,31 @@ export default {
       modelType: "all",
       showLine: "yes",
       guiParams: {},
+      result: {},
       // outlinePass: null,
     };
   },
   created() {},
-  mounted() {
-    this.formatData();
-    this.initStats();
-    this.colorTool = new THREE.Color();
-    this.createRaycaster();
-    this.initRenderer();
-    this.createGroupOfAllModel();
+  async mounted() {
+    try {
+      this.result = await this.getTotalData();
+      this.formatData();
+      this.initStats();
+      this.colorTool = new THREE.Color();
+      this.createRaycaster();
+      this.initRenderer();
+      this.createGroupOfAllModel();
 
-    this.effect();
-    // this.createModel();
-    this.addControler();
-    this.animate();
-    // this.showAxesHelper();
-    this.initGUI();
+      this.effect();
+      // this.createModel();
+      this.addControler();
+      this.animate();
+      // this.showAxesHelper();
+      this.initGUI();
+    } catch (err) {
+      console.log(err);
+    }
+
     // addListener();
   },
   methods: {
@@ -175,6 +183,7 @@ export default {
         ])
         .onChange((type) => {
           this.modelType = type;
+          this.changeCluster(type);
         });
       gui.add(this.params, "showLine").onChange((showLine) => {
         if (showLine) {
@@ -201,19 +210,7 @@ export default {
       });
       gui.add(this.params, "reset").onChange((reset) => {
         if (reset) {
-          scene.traverseVisible((object) => {
-            if (object.name.includes("boll")) {
-              object.material.opacity = 0.2;
-              object.material.color.set(0xffffff);
-            }
-            if (object.name.includes("inner")) {
-              object.material.opacity = 1;
-            }
-            if (object.name.includes("line")) {
-              object.material.opacity = 0.2;
-            }
-            currentModel.visible = false;
-          });
+          this.resetToDefaultStyle();
         }
       });
       gui.open();
@@ -264,9 +261,28 @@ export default {
       camera.up.set(0, 0, 1);
       // camera.lookAt(scene.position);
     },
+    async getTotalData() {
+      return new Promise((resolve, reject) => {
+        this.$axios
+          .get(axiosPre + "/api/relation/show")
+          .then((res) => {
+            console.log("res", res);
+            let { code, message, data } = res.data;
+            if (code == 200) {
+              resolve(data);
+            } else {
+              reject(new Error(message));
+            }
+          })
+          .catch((err) => {
+            reject(err);
+          });
+      });
+    },
     createGroupOfAllModel() {
       this.createTextFontLoader();
       groupOfAllModels = new THREE.Group();
+
       this.createGroup();
       this.createFoundationModel();
       this.createCenterAxis();
@@ -307,6 +323,7 @@ export default {
     },
     addTextbyCanvas(obj, position) {
       const label = obj.userData.config.label;
+      const cluster = obj.userData.config.cluster;
       const textCanvas = document.createElement("canvas");
       const context = textCanvas.getContext("2d");
       const scale = 2;
@@ -341,7 +358,7 @@ export default {
         canvasHeight / lineHeight / 18,
         0
       );
-      textMesh.name = label;
+      textMesh.name = `text_${cluster}_${label}`;
       return textMesh;
     },
     textAnimate() {
@@ -353,7 +370,7 @@ export default {
       });
     },
     formatData() {
-      let { nodes, edges } = result.data;
+      let { nodes, edges } = this.result;
       nodes.forEach((node) => {
         let { relationId } = node;
         let edgeLists = edges.filter((edge) => {
@@ -568,6 +585,7 @@ export default {
         100
       );
       const textureLoader = new THREE.TextureLoader();
+      THREE.TextureLoader.crossOrigin = "";
       return new Promise((resolve, reject) => {
         textureLoader.load(
           "/static/bigCircle.png",
@@ -629,11 +647,12 @@ export default {
             opacity,
           });
           // texture.center.set(0, 0);
-          this.foundationModel = new THREE.Mesh(geometry, material);
+          foundationModel = new THREE.Mesh(geometry, material);
 
-          this.foundationModel.rotation.x = -Math.PI / 2;
-          this.foundationModel.position.set(0, 0, xRadius);
-          groupOfAllModels.add(this.foundationModel);
+          foundationModel.rotation.x = -Math.PI / 2;
+          foundationModel.position.set(0, 0, xRadius);
+          foundationModel.name = "foundationModel";
+          groupOfAllModels.add(foundationModel);
         },
         (e) => {
           console.log("onprogress");
@@ -667,6 +686,7 @@ export default {
       const centerAxis = new THREE.Mesh(geometry, material);
       centerAxis.rotation.x = Math.PI / 2;
       centerAxis.position.z = floorRadius - Math.cos(Math.PI / 9) * floorRadius;
+      centerAxis.name = "centerAxis";
       groupOfAllModels.add(centerAxis);
     },
     // 默认球效果
@@ -699,6 +719,7 @@ export default {
       group.userData.config = config;
       let textPosition = { x: 0, y: 0, z: -radius * 2 };
       const textMesh = this.addTextbyCanvas(group, textPosition);
+      group.name = `group_${config.relationId}`;
       group.add(textMesh);
       this.defaultBoll.push(group);
       return group;
@@ -793,6 +814,67 @@ export default {
       line.userData.config = config;
       return line;
     },
+    changeCluster(cluster) {
+      // switch(cluster){
+      //   case 'all':
+      //   scene.traverse((object) => {
+      //     object.visible = true;
+      //   });
+      //   currentModel.visible = false;
+      //   break;
+      //   case 'proGroup':
+      //   groupOfAllModels.traverse(object=>{
+      //     if(object.name.includes(cluster)){
+      //       object.visible = true;
+      //     }
+      //   })
+      // }
+      this.resetToDefaultStyle();
+      if (cluster === "all") {
+        scene.traverse((object) => {
+          object.visible = true;
+        });
+        currentModel.visible = false;
+      } else {
+        let selectedNodeGroups = [];
+        groupOfAllModels.traverse((object) => {
+          if (object.name.includes(`group_${cluster}`)) {
+            selectedNodeGroups.push(object);
+          }
+        });
+        groupOfAllModels.children.forEach((child) => {
+          if (
+            child.name === `${cluster}_group` ||
+            child.name === "foundationModel" ||
+            child.name === "centerAxis"
+          ) {
+            child.visible = true;
+            console.log("child", child);
+          } else {
+            child.visible = false;
+          }
+        });
+        scene.traverse((object) => {
+          if (object.name.includes("line")) {
+            object.visible = false;
+          }
+        });
+
+        selectedNodeGroups.forEach((group) => {
+          let edgeLists = group.userData.config.edgeLists;
+          edgeLists.forEach((edgeData) => {
+            let { source, target, edgeId } = edgeData;
+            if (source.includes(cluster) && target.includes(cluster)) {
+              let edgeModel = scene.getObjectByName(`line_${edgeData.edgeId}`);
+              edgeModel.visible = true;
+            }
+
+            // selectedEdges.push(edge)
+          });
+        });
+        // let selectedEdges =
+      }
+    },
     // 后期处理-高亮
     effect() {
       // debugger;
@@ -827,9 +909,28 @@ export default {
     createRaycaster() {
       raycaster = new THREE.Raycaster();
     },
+    getRelevanceModels(selectedNode) {
+      let { cluster, id } = selectedNode.userData.config;
+      return this.$axios
+        .get(
+          `${axiosPre}/api/relation/showHighlightLink?cluster=${cluster}&id=${id}`
+        )
+        .then((res) => {
+          let { code, message, data } = res.data;
+          if (code == 200) {
+            return data;
+          } else {
+            return new Error(message);
+          }
+        });
+    },
     mouseClick(event) {
       event.preventDefault();
-      activeObjects.clear();
+      if (this.modelType != "all") {
+        return;
+      }
+
+      activeObjects = { edgeIds: [], nodeIds: [] };
       if (!camera) {
         return;
       }
@@ -877,19 +978,29 @@ export default {
             object.material.opacity = 0.2;
           }
         });
-        this.getRelevanceModels(ifBoll.object, "node");
-        activeObjects.forEach((object) => {
-          if (object.name.includes("boll")) {
-            object.material.opacity = 0.1;
-            object.material.color.set(0xffffff);
-            let innerObjectName = `inner_${object.userData.config.relationId}`;
-            let innerObject = scene.getObjectByName(innerObjectName);
-            innerObject.material.opacity = 1;
-          } else {
-            object.material.opacity = 1;
-            object.material.color.set("#38B7FF");
-            object.material.lineWidth = 4;
-          }
+        this.getRelevanceModels(selectedNode).then((data) => {
+          activeObjects = data;
+          let { edgeIds, nodeIds } = activeObjects;
+          edgeIds.forEach((edgeId) => {
+            let activeEdge = scene.getObjectByName(`line_${edgeId}`);
+            if (activeEdge) {
+              activeEdge.material.opacity = 1;
+              activeEdge.material.color.set("#38B7FF");
+              activeEdge.material.lineWidth = 4;
+            }
+          });
+          nodeIds.forEach((nodeId) => {
+            let activeOuterBoll = groupOfAllModels.getObjectByName(
+              `boll_${nodeId}`
+            );
+            if (activeOuterBoll) {
+              activeOuterBoll.material.opacity = 0.1;
+              activeOuterBoll.material.color.set(0xffffff);
+              let innerObjectName = `inner_${nodeId}`;
+              let innerObject = scene.getObjectByName(innerObjectName);
+              innerObject.material.opacity = 1;
+            }
+          });
         });
       } else {
         // scene.traverseVisible((object) => {
@@ -905,53 +1016,53 @@ export default {
         //   }
         // });
       }
-      activeObjects.clear();
-      selectedNode = null;
+
+      // selectedNode = null;
     },
-    getRelevanceModels(model, type) {
-      if (!model || activeObjects.has(model)) {
-        return;
-      }
-      let config = model.userData.config;
-      let originalCluster = selectedNode.userData.config.cluster;
-      let selectedNodeRelationId = selectedNode.userData.config.relationId;
-      let selectedNodeLayer = selectedNode.userData.config.layer;
-      if (type === "node") {
-        let cluster = config.cluster;
-        if (
-          activeObjects.size &&
-          cluster === originalCluster &&
-          selectedNodeLayer === config.layer
-        ) {
-          return;
-        }
-        activeObjects.add(model);
-        let edgeLists = config.edgeLists;
-        if (cluster === "proGroup" && originalCluster != "proGroup") {
-          return;
-        }
-        edgeLists.forEach((edge) => {
-          let edgeName = `line_${edge.edgeId}`;
-          let edgeModel = scene.getObjectByName(edgeName);
-          this.getRelevanceModels(edgeModel, "edge");
-        });
-      } else if (type === "edge") {
-        if (
-          config.edgeId.includes(originalCluster) &&
-          !config.edgeId.includes(selectedNodeRelationId)
-        ) {
-          return;
-        }
-        activeObjects.add(model);
-        let { source, target } = config;
-        let sourceName = `boll_${source}`;
-        let targetName = `boll_${target}`;
-        let sourceModel = groupOfAllModels.getObjectByName(sourceName);
-        let targetModel = groupOfAllModels.getObjectByName(targetName);
-        this.getRelevanceModels(sourceModel, "node");
-        this.getRelevanceModels(targetModel, "node");
-      }
-    },
+    // getRelevanceModels(model, type) {
+    //   if (!model || activeObjects.has(model)) {
+    //     return;
+    //   }
+    //   let config = model.userData.config;
+    //   let originalCluster = selectedNode.userData.config.cluster;
+    //   let selectedNodeRelationId = selectedNode.userData.config.relationId;
+    //   let selectedNodeLayer = selectedNode.userData.config.layer;
+    //   if (type === "node") {
+    //     let cluster = config.cluster;
+    //     if (
+    //       activeObjects.size &&
+    //       cluster === originalCluster &&
+    //       selectedNodeLayer === config.layer
+    //     ) {
+    //       return;
+    //     }
+    //     activeObjects.add(model);
+    //     let edgeLists = config.edgeLists;
+    //     if (cluster === "proGroup" && originalCluster != "proGroup") {
+    //       return;
+    //     }
+    //     edgeLists.forEach((edge) => {
+    //       let edgeName = `line_${edge.edgeId}`;
+    //       let edgeModel = scene.getObjectByName(edgeName);
+    //       this.getRelevanceModels(edgeModel, "edge");
+    //     });
+    //   } else if (type === "edge") {
+    //     if (
+    //       config.edgeId.includes(originalCluster) &&
+    //       !config.edgeId.includes(selectedNodeRelationId)
+    //     ) {
+    //       return;
+    //     }
+    //     activeObjects.add(model);
+    //     let { source, target } = config;
+    //     let sourceName = `boll_${source}`;
+    //     let targetName = `boll_${target}`;
+    //     let sourceModel = groupOfAllModels.getObjectByName(sourceName);
+    //     let targetModel = groupOfAllModels.getObjectByName(targetName);
+    //     this.getRelevanceModels(sourceModel, "node");
+    //     this.getRelevanceModels(targetModel, "node");
+    //   }
+    // },
     mouseMove(event) {
       event.preventDefault();
       if (!camera) {
@@ -971,9 +1082,10 @@ export default {
 
       if (ifBoll) {
         let bollTextModel;
-        let label = ifBoll.object.userData.config.label;
+        // let label = ifBoll.object.userData.config.label;
+        let { label, cluster } = ifBoll.object.userData.config;
         groupOfAllModels.traverseVisible((object) => {
-          if (object.name === label) {
+          if (object.name === `text_${cluster}_${label}`) {
             // const canvas = object.material.map.image;
             // const context = canvas.getContext("2d");
             // const lineHeight = 36;
@@ -992,7 +1104,7 @@ export default {
         if (lastSelectedObject) {
           let label = lastSelectedObject.userData.config.label;
           groupOfAllModels.traverseVisible((object) => {
-            if (object.name === label) {
+            if (object.name.includes("text")) {
               const canvas = object.material.map.image;
               const context = canvas.getContext("2d");
               const lineHeight = 36;
@@ -1051,7 +1163,21 @@ export default {
       renderer && renderer.setSize(width, height);
       composer && composer.setSize(width, height);
     },
-
+    resetToDefaultStyle() {
+      scene.traverseVisible((object) => {
+        if (object.name.includes("boll")) {
+          object.material.opacity = 0.2;
+          object.material.color.set(0xffffff);
+        }
+        if (object.name.includes("inner")) {
+          object.material.opacity = 1;
+        }
+        if (object.name.includes("line")) {
+          object.material.opacity = 0.2;
+        }
+        currentModel.visible = false;
+      });
+    },
     getCircleCoords(radius, segments) {
       var coords = [];
       var angle = 0;
