@@ -829,6 +829,7 @@ export default {
     },
     mouseClick(event) {
       event.preventDefault();
+      activeObjects.clear();
       if (!camera) {
         return;
       }
@@ -926,7 +927,7 @@ export default {
         }
         activeObjects.add(model);
         let edgeLists = config.edgeLists;
-        if (cluster === "proGroup") {
+        if (cluster === "proGroup" && originalCluster != "proGroup") {
           return;
         }
         edgeLists.forEach((edge) => {
