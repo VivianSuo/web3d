@@ -18,7 +18,8 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass.js";
 import { BloomPass } from "three/examples/jsm/postprocessing/BloomPass.js";
-import { SSAARenderPass } from "three/examples/jsm/postprocessing/SSAARenderPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
 // import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 const axiosPre = "http://172.16.20.33:8087";
 let renderer,
@@ -29,6 +30,7 @@ let renderer,
   controler,
   composer,
   outlinePass,
+  effectFXAA,
   stats,
   gui,
   raycaster,
@@ -173,46 +175,46 @@ export default {
       gui.add(this.params, "modelZ").onChange((modelZ) => {
         groupOfAllModels.position.z = modelZ;
       });
-      gui
-        .add(this.params, "modelType", [
-          "all",
-          "proGroup",
-          "project",
-          "subsystem",
-          "ability",
-        ])
-        .onChange((type) => {
-          this.modelType = type;
-          this.changeCluster(type);
-        });
-      gui.add(this.params, "showLine").onChange((showLine) => {
-        if (showLine) {
-          scene.traverseVisible((object) => {
-            if (object.name.includes("line")) {
-              object.material.visible = true;
-            }
-          });
-        } else {
-          scene.traverseVisible((object) => {
-            if (object.name.includes("line")) {
-              object.material.visible = false;
-            }
-          });
-        }
-      });
-      gui.add(this.params, "openEvent").onChange((openEvent) => {
-        if (openEvent) {
-          this.$refs.webglDom.removeEventListener("click", this.mouseClick);
-          this.$refs.webglDom.addEventListener("click", this.mouseClick);
-        } else {
-          this.$refs.webglDom.removeEventListener("click", this.mouseClick);
-        }
-      });
-      gui.add(this.params, "reset").onChange((reset) => {
-        if (reset) {
-          this.resetToDefaultStyle();
-        }
-      });
+      // gui
+      //   .add(this.params, "modelType", [
+      //     "all",
+      //     "proGroup",
+      //     "project",
+      //     "subsystem",
+      //     "ability",
+      //   ])
+      //   .onChange((type) => {
+      //     this.modelType = type;
+      //     this.changeCluster(type);
+      //   });
+      // gui.add(this.params, "showLine").onChange((showLine) => {
+      //   if (showLine) {
+      //     scene.traverseVisible((object) => {
+      //       if (object.name.includes("line")) {
+      //         object.material.visible = true;
+      //       }
+      //     });
+      //   } else {
+      //     scene.traverseVisible((object) => {
+      //       if (object.name.includes("line")) {
+      //         object.material.visible = false;
+      //       }
+      //     });
+      //   }
+      // });
+      // gui.add(this.params, "openEvent").onChange((openEvent) => {
+      //   if (openEvent) {
+      //     this.$refs.webglDom.removeEventListener("click", this.mouseClick);
+      //     this.$refs.webglDom.addEventListener("click", this.mouseClick);
+      //   } else {
+      //     this.$refs.webglDom.removeEventListener("click", this.mouseClick);
+      //   }
+      // });
+      // gui.add(this.params, "reset").onChange((reset) => {
+      //   if (reset) {
+      //     this.resetToDefaultStyle();
+      //   }
+      // });
       gui.open();
     },
     initRenderer() {
@@ -266,7 +268,6 @@ export default {
         this.$axios
           .get(axiosPre + "/api/relation/show")
           .then((res) => {
-            console.log("res", res);
             let { code, message, data } = res.data;
             if (code == 200) {
               resolve(data);
@@ -294,7 +295,6 @@ export default {
       this.fontLoader = new THREE.FontLoader();
     },
     addText(obj, radius) {
-      console.log("obj", obj);
       this.fontLoader.load("/static/fonts/ZH_CN.json", (font) => {
         const geometry = new THREE.TextGeometry(obj.userData.config.label, {
           font: font,
@@ -386,7 +386,6 @@ export default {
         }
       });
       this.edgeDatas = edges;
-      console.log("_nodeDatas", this.nodeDatas);
     },
     async createGroup() {
       // layer 是由上到下由0开始逐渐递增。最上层是能力。
@@ -395,7 +394,6 @@ export default {
 
       // this.nodeDatas.forEach((value, key) => {
       for (let [key, value] of this.nodeDatas) {
-        console.log(value);
         let type = value[0].cluster;
         let nodeColor = this.nodeColors.get(type);
         let z = this.centerAxisStyle.z - stepH * key;
@@ -471,7 +469,6 @@ export default {
 
       this.edgeDatas.forEach((edge) => {
         let { source, target } = edge;
-        // console.log("source,target", source, target);
         let sourceName = `boll_${source}`;
         let targetName = `boll_${target}`;
         let sourceModel = groupOfAllModels.getObjectByName(sourceName);
@@ -502,7 +499,6 @@ export default {
           nodeRadius,
           nodeObj
         );
-        // console.log("xyCoords", xyCoords);
         let { x, y } = xyCoords[index];
         nodeModelGroup.position.set(x, y, 0);
         nodesModel.push(nodeModelGroup);
@@ -543,7 +539,6 @@ export default {
     },
     //球
     createBollsModel(node) {
-      console.log("node", node);
       let radius = 0.05;
       const group = new THREE.Group();
       const geometry = new THREE.SphereGeometry(radius, 32, 16);
@@ -633,8 +628,8 @@ export default {
       const doorColorTexture = textureLoader.load(
         "/static/foundation.png",
         (texture) => {
-          console.log("loader", texture);
-          console.log("doorColorTexture", doorColorTexture);
+          // console.log("loader", texture);
+          // console.log("doorColorTexture", doorColorTexture);
           // const uvs = [0, 1, 1, 1, 0, 0, 1, 0];
           // geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
           const material = new THREE.MeshLambertMaterial({
@@ -655,7 +650,7 @@ export default {
           groupOfAllModels.add(foundationModel);
         },
         (e) => {
-          console.log("onprogress");
+          // console.log("onprogress");
         },
         (err) => {
           console.log("error", err);
@@ -691,7 +686,6 @@ export default {
     },
     // 默认球效果
     createNestBoll(color, radius, config) {
-      console.log("color", color);
       const group = new THREE.Group();
       const geometry = new THREE.SphereGeometry(radius, 32, 16);
       const innerMaterial = new THREE.MeshPhongMaterial({
@@ -717,7 +711,7 @@ export default {
       group.add(innerSphere);
       group.add(outerSphere);
       group.userData.config = config;
-      let textPosition = { x: 0, y: 0, z: -radius * 2 };
+      let textPosition = { x: 0, y: 0, z: -radius * 2 - 0.01 };
       const textMesh = this.addTextbyCanvas(group, textPosition);
       group.name = `group_${config.relationId}`;
       group.add(textMesh);
@@ -752,7 +746,6 @@ export default {
           bollR * 1.2,
           0.0015
         );
-        console.log(outerModel);
         this.upgradeBollOuterModelList.push(outerModel);
         outerModel.rotation.y = (i * Math.PI) / 9;
         upgradeBollModel.add(outerModel);
@@ -849,7 +842,6 @@ export default {
             child.name === "centerAxis"
           ) {
             child.visible = true;
-            console.log("child", child);
           } else {
             child.visible = false;
           }
@@ -898,13 +890,19 @@ export default {
       outlinePass.pulsePeriod = 3; // 呼吸闪烁的速度
       outlinePass.visibleEdgeColor.set(0xff4ecfff);
       outlinePass.hiddenEdgeColor.set(0x00ffff);
-      outlinePass.clear = true;
-      var ssaaRenderPass = new SSAARenderPass(scene, camera);
-      ssaaRenderPass.sampleLevel = 32;
-      ssaaRenderPass.unbiased = true;
+      effectFXAA = new ShaderPass(FXAAShader);
+      effectFXAA.uniforms["resolution"].value.set(
+        1 / window.innerWidth,
+        1 / window.innerHeight
+      );
+      composer.addPass(effectFXAA);
+      // outlinePass.clear = true;
+      // var ssaaRenderPass = new SSAARenderPass(scene, camera);
+      // ssaaRenderPass.sampleLevel = 32;
+      // ssaaRenderPass.unbiased = true;
       composer.addPass(renderPass);
       composer.addPass(outlinePass);
-      composer.addPass(ssaaRenderPass);
+      // composer.addPass(ssaaRenderPass);
     },
     createRaycaster() {
       raycaster = new THREE.Raycaster();
@@ -959,7 +957,6 @@ export default {
         );
         currentModel.traverseVisible((child) => {
           if (child.type === "Mesh") {
-            console.log("child", child);
             child.material.color.set(new THREE.Color(currentModelColor));
             child.material.emissive.set(new THREE.Color(currentModelColor));
           }
@@ -1086,37 +1083,43 @@ export default {
         let { label, cluster } = ifBoll.object.userData.config;
         groupOfAllModels.traverseVisible((object) => {
           if (object.name === `text_${cluster}_${label}`) {
-            // const canvas = object.material.map.image;
-            // const context = canvas.getContext("2d");
-            // const lineHeight = 36;
-            // context.fillStyle = "red";
-            // context.fillText(label, 0, lineHeight / 2);
+            const canvas = object.material.map.image;
+            const context = canvas.getContext("2d");
+            const lineHeight = 36;
+            context.fillStyle = "#f4ecff";
+            context.fillText(label, 0, lineHeight / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            object.material.map = texture;
+            object.material.needsUpdate = true;
             // console.log("text", object);
             bollTextModel = object;
           }
         });
         // console.log(bollTextModel);
         composer.addPass(outlinePass);
-        outlinePass.selectedObjects = [ifBoll.object, bollTextModel];
+        outlinePass.selectedObjects = [ifBoll.object];
         document.body.style.cursor = "pointer";
       } else {
         let lastSelectedObject = outlinePass.selectedObjects[0];
         if (lastSelectedObject) {
-          let label = lastSelectedObject.userData.config.label;
+          let { label, cluster } = lastSelectedObject.userData.config;
           groupOfAllModels.traverseVisible((object) => {
-            if (object.name.includes("text")) {
+            if (object.name === `text_${cluster}_${label}`) {
               const canvas = object.material.map.image;
               const context = canvas.getContext("2d");
               const lineHeight = 36;
               context.fillStyle = "#ffffff";
               context.fillText(label, 0, lineHeight / 2);
+              const texture = new THREE.CanvasTexture(canvas);
+              object.material.map = texture;
+              object.material.needsUpdate = true;
               // console.log("text", object);
             }
           });
         }
 
         composer.removePass(outlinePass);
-        outlinePass.selectedObjects = [];
+        // outlinePass.selectedObjects = [];
         // this.defaultBoll = [];
         document.body.style.cursor = "default";
       }
@@ -1138,11 +1141,11 @@ export default {
       });
 
       controler.update();
-      // if (composer) {
-      //   composer.render();
-      // }
+      if (composer) {
+        composer.render();
+      }
 
-      renderer.render(scene, camera);
+      // renderer.render(scene, camera);
       animateId = requestAnimationFrame(this.animate);
     },
     showAxesHelper() {
@@ -1162,6 +1165,7 @@ export default {
 
       renderer && renderer.setSize(width, height);
       composer && composer.setSize(width, height);
+      effectFXAA.uniforms["resolution"].value.set(1 / width, 1 / height);
     },
     resetToDefaultStyle() {
       scene.traverseVisible((object) => {
@@ -1231,15 +1235,15 @@ export default {
     console.log("beforeDestroy");
     this.disposeScene();
   },
-  watch: {
-    modelType: {
-      handler: (type) => {
-        console.log("curModelType", type);
-        if (type === "all") {
-        }
-      },
-    },
-  },
+  // watch: {
+  //   modelType: {
+  //     handler: (type) => {
+  //       console.log("curModelType", type);
+  //       if (type === "all") {
+  //       }
+  //     },
+  //   },
+  // },
 };
 </script>
 
