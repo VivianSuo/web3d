@@ -478,16 +478,34 @@ export default {
 
       this.edgeDatas.forEach((edge) => {
         let { source, target } = edge;
-        let sourceName = `boll_${source}`;
-        let targetName = `boll_${target}`;
+        // let sourceName = `boll_${source}`;
+        let sourceName = `group_${source}`;
+        // let targetName = `boll_${target}`;
+        let targetName = `group_${target}`;
+
         let sourceModel = groupOfAllModels.getObjectByName(sourceName);
         let targetModel = groupOfAllModels.getObjectByName(targetName);
-        let startPoint = new THREE.Vector3();
-        let endPoint = new THREE.Vector3();
-        sourceModel.getWorldPosition(startPoint);
-        targetModel.getWorldPosition(endPoint);
+        let groupOfSourceModel = sourceModel.parent;
+
+        let groupOfTargetModel = targetModel.parent;
+        let startPoint = new THREE.Vector3(
+          sourceModel.position.x,
+          sourceModel.position.y,
+          groupOfSourceModel.position.z
+        );
+        let endPoint = new THREE.Vector3(
+          targetModel.position.x,
+          targetModel.position.y,
+          groupOfTargetModel.position.z
+        );
+        console.log("startPoint", startPoint);
+        console.log("endPoint", endPoint);
+        // sourceModel.getWorldPosition(startPoint);
+        // targetModel.getWorldPosition(endPoint);
+        // startPoint = [sourceModel.position.x,sourceModel.y,groupOfSourceModel.z];
+        // endPoint = targetModel.position;
         let lineModel = this.createLine(startPoint, endPoint, edge);
-        scene.add(lineModel);
+        groupOfAllModels.add(lineModel);
       });
     },
     combineModel(
@@ -855,7 +873,7 @@ export default {
             child.visible = false;
           }
         });
-        scene.traverse((object) => {
+        groupOfAllModels.traverse((object) => {
           if (object.name.includes("line")) {
             object.visible = false;
           }
@@ -866,7 +884,9 @@ export default {
           edgeLists.forEach((edgeData) => {
             let { source, target, edgeId } = edgeData;
             if (source.includes(cluster) && target.includes(cluster)) {
-              let edgeModel = scene.getObjectByName(`line_${edgeData.edgeId}`);
+              let edgeModel = groupOfAllModels.getObjectByName(
+                `line_${edgeData.edgeId}`
+              );
               edgeModel.visible = true;
             }
 
@@ -972,7 +992,7 @@ export default {
         });
         currentModel.visible = true;
         // currentModel.material.color.set(currentModelColor);
-        scene.traverseVisible((object) => {
+        groupOfAllModels.traverseVisible((object) => {
           if (object.name.includes("boll")) {
             object.material.opacity = 0.3;
             object.material.color.set(0x000);
@@ -988,7 +1008,7 @@ export default {
           activeObjects = data;
           let { edgeIds, nodeIds } = activeObjects;
           edgeIds.forEach((edgeId) => {
-            let activeEdge = scene.getObjectByName(`line_${edgeId}`);
+            let activeEdge = groupOfAllModels.getObjectByName(`line_${edgeId}`);
             if (activeEdge) {
               activeEdge.material.opacity = 1;
               activeEdge.material.color.set("#38B7FF");
@@ -1003,7 +1023,8 @@ export default {
               activeOuterBoll.material.opacity = 0.1;
               activeOuterBoll.material.color.set(0xffffff);
               let innerObjectName = `inner_${nodeId}`;
-              let innerObject = scene.getObjectByName(innerObjectName);
+              let innerObject =
+                groupOfAllModels.getObjectByName(innerObjectName);
               innerObject.material.opacity = 1;
             }
           });
@@ -1145,7 +1166,7 @@ export default {
         let deltaX = currentMouseX - mouseX;
         mouseX = event.clientX;
         let deg = deltaX / 280;
-        scene.rotation.z += deg;
+        groupOfAllModels.rotation.z += deg;
       }
     },
     mouseDownFunc(event) {
