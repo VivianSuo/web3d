@@ -37,7 +37,10 @@ let renderer,
   animateId,
   selectedNode,
   currentModel,
-  activeObjects;
+  activeObjects,
+  mouseDown;
+let mouseX = 0;
+let rotateStart = new THREE.Vector2();
 export default {
   name: "HelloWorld",
   data() {
@@ -130,7 +133,7 @@ export default {
 
       this.effect();
       // this.createModel();
-      this.addControler();
+      // this.addControler();
       this.animate();
       // this.showAxesHelper();
       this.initGUI();
@@ -175,46 +178,46 @@ export default {
       gui.add(this.params, "modelZ").onChange((modelZ) => {
         groupOfAllModels.position.z = modelZ;
       });
-      // gui
-      //   .add(this.params, "modelType", [
-      //     "all",
-      //     "proGroup",
-      //     "project",
-      //     "subsystem",
-      //     "ability",
-      //   ])
-      //   .onChange((type) => {
-      //     this.modelType = type;
-      //     this.changeCluster(type);
-      //   });
-      // gui.add(this.params, "showLine").onChange((showLine) => {
-      //   if (showLine) {
-      //     scene.traverseVisible((object) => {
-      //       if (object.name.includes("line")) {
-      //         object.material.visible = true;
-      //       }
-      //     });
-      //   } else {
-      //     scene.traverseVisible((object) => {
-      //       if (object.name.includes("line")) {
-      //         object.material.visible = false;
-      //       }
-      //     });
-      //   }
-      // });
-      // gui.add(this.params, "openEvent").onChange((openEvent) => {
-      //   if (openEvent) {
-      //     this.$refs.webglDom.removeEventListener("click", this.mouseClick);
-      //     this.$refs.webglDom.addEventListener("click", this.mouseClick);
-      //   } else {
-      //     this.$refs.webglDom.removeEventListener("click", this.mouseClick);
-      //   }
-      // });
-      // gui.add(this.params, "reset").onChange((reset) => {
-      //   if (reset) {
-      //     this.resetToDefaultStyle();
-      //   }
-      // });
+      gui
+        .add(this.params, "modelType", [
+          "all",
+          "proGroup",
+          "project",
+          "subsystem",
+          "ability",
+        ])
+        .onChange((type) => {
+          this.modelType = type;
+          this.changeCluster(type);
+        });
+      gui.add(this.params, "showLine").onChange((showLine) => {
+        if (showLine) {
+          scene.traverseVisible((object) => {
+            if (object.name.includes("line")) {
+              object.material.visible = true;
+            }
+          });
+        } else {
+          scene.traverseVisible((object) => {
+            if (object.name.includes("line")) {
+              object.material.visible = false;
+            }
+          });
+        }
+      });
+      gui.add(this.params, "openEvent").onChange((openEvent) => {
+        if (openEvent) {
+          this.$refs.webglDom.removeEventListener("click", this.mouseClick);
+          this.$refs.webglDom.addEventListener("click", this.mouseClick);
+        } else {
+          this.$refs.webglDom.removeEventListener("click", this.mouseClick);
+        }
+      });
+      gui.add(this.params, "reset").onChange((reset) => {
+        if (reset) {
+          this.resetToDefaultStyle();
+        }
+      });
       gui.open();
     },
     initRenderer() {
@@ -228,6 +231,12 @@ export default {
       this.initCamera();
       this.initLight();
       window.addEventListener("resize", this.onWindowResize);
+      renderer.domElement.addEventListener(
+        "mousedown",
+        this.mouseDownFunc,
+        true
+      );
+      renderer.domElement.addEventListener("mouseup", this.mouseUpFunc, true);
       // document.body.appendChild(renderer.domElement);
     },
     initLight() {
@@ -261,7 +270,7 @@ export default {
       camera.position.x = 2;
       camera.position.y = 2;
       camera.up.set(0, 0, 1);
-      // camera.lookAt(scene.position);
+      camera.lookAt(scene.position);
     },
     async getTotalData() {
       return new Promise((resolve, reject) => {
@@ -1061,7 +1070,9 @@ export default {
     //   }
     // },
     mouseMove(event) {
+      // console.log("mouseMove");
       event.preventDefault();
+      // composer.removePass(outlinePass);
       if (!camera) {
         return;
       }
@@ -1076,53 +1087,79 @@ export default {
       let ifBoll = intersects.find((item) => {
         return item.object.name && item.object.name.includes("boll");
       });
-
-      if (ifBoll) {
-        let bollTextModel;
-        // let label = ifBoll.object.userData.config.label;
-        let { label, cluster } = ifBoll.object.userData.config;
-        groupOfAllModels.traverseVisible((object) => {
-          if (object.name === `text_${cluster}_${label}`) {
-            const canvas = object.material.map.image;
-            const context = canvas.getContext("2d");
-            const lineHeight = 36;
-            context.fillStyle = "#f4ecff";
-            context.fillText(label, 0, lineHeight / 2);
-            const texture = new THREE.CanvasTexture(canvas);
-            object.material.map = texture;
-            object.material.needsUpdate = true;
-            // console.log("text", object);
-            bollTextModel = object;
-          }
-        });
-        // console.log(bollTextModel);
-        composer.addPass(outlinePass);
-        outlinePass.selectedObjects = [ifBoll.object];
-        document.body.style.cursor = "pointer";
+      if (mouseDown) {
       } else {
-        let lastSelectedObject = outlinePass.selectedObjects[0];
-        if (lastSelectedObject) {
-          let { label, cluster } = lastSelectedObject.userData.config;
+        if (ifBoll) {
+          let bollTextModel;
+          // let label = ifBoll.object.userData.config.label;
+          let { label, cluster } = ifBoll.object.userData.config;
           groupOfAllModels.traverseVisible((object) => {
             if (object.name === `text_${cluster}_${label}`) {
               const canvas = object.material.map.image;
               const context = canvas.getContext("2d");
               const lineHeight = 36;
-              context.fillStyle = "#ffffff";
+              context.fillStyle = "#f4ecff";
               context.fillText(label, 0, lineHeight / 2);
               const texture = new THREE.CanvasTexture(canvas);
               object.material.map = texture;
               object.material.needsUpdate = true;
               // console.log("text", object);
+              bollTextModel = object;
             }
           });
-        }
+          // console.log(bollTextModel);
+          composer.addPass(outlinePass);
+          outlinePass.selectedObjects = [ifBoll.object];
+          document.body.style.cursor = "pointer";
+        } else {
+          let lastSelectedObject = outlinePass.selectedObjects[0];
+          if (lastSelectedObject) {
+            let { label, cluster } = lastSelectedObject.userData.config;
+            groupOfAllModels.traverseVisible((object) => {
+              if (object.name === `text_${cluster}_${label}`) {
+                const canvas = object.material.map.image;
+                const context = canvas.getContext("2d");
+                const lineHeight = 36;
+                context.fillStyle = "#ffffff";
+                context.fillText(label, 0, lineHeight / 2);
+                const texture = new THREE.CanvasTexture(canvas);
+                object.material.map = texture;
+                object.material.needsUpdate = true;
+                // console.log("text", object);
+              }
+            });
+          }
 
-        composer.removePass(outlinePass);
-        // outlinePass.selectedObjects = [];
-        // this.defaultBoll = [];
-        document.body.style.cursor = "default";
+          composer.removePass(outlinePass);
+          // outlinePass.selectedObjects = [];
+          // this.defaultBoll = [];
+          document.body.style.cursor = "default";
+        }
       }
+    },
+    mouseMove1(event) {
+      event.preventDefault();
+      if (mouseDown) {
+        document.body.style.cursor = "move";
+        let currentMouseX = event.clientX;
+        let deltaX = currentMouseX - mouseX;
+        mouseX = event.clientX;
+        let deg = deltaX / 280;
+        scene.rotation.z += deg;
+      }
+    },
+    mouseDownFunc(event) {
+      event.preventDefault();
+      mouseDown = true;
+      mouseX = event.clientX;
+      rotateStart.set(event.clientX, event.clientY);
+      renderer.domElement.addEventListener("mousemove", this.mouseMove1, false);
+    },
+    mouseUpFunc(event) {
+      event.preventDefault();
+      mouseDown = false;
+      renderer.domElement.removeEventListener("mousemove", this.mouseMove1);
+      document.body.style.cursor = "default";
     },
     animate() {
       if (animateId) {
@@ -1140,12 +1177,12 @@ export default {
         }
       });
 
-      controler.update();
-      if (composer) {
-        composer.render();
-      }
+      // controler.update();
+      // if (composer) {
+      //   composer.render();
+      // }
 
-      // renderer.render(scene, camera);
+      renderer.render(scene, camera);
       animateId = requestAnimationFrame(this.animate);
     },
     showAxesHelper() {
@@ -1216,14 +1253,10 @@ export default {
       THREE.Cache.clear();
       // 清除事件监听器和动画循环
       window.removeEventListener("resize", this.onWindowResize);
-      document.body.removeChild(stats.dom);
-      document.body.removeChild(gui.domElement);
-      stats = null;
-      gui = null;
 
-      // 清除相关资源，取决于GUI和Stats库的具体实现
-      gui.destroy();
-      stats.destroy(); // 假设Stats有destroy方法
+      gui.close();
+      stats.end();
+
       if (animateId) {
         window.cancelAnimationFrame(animateId);
       }
