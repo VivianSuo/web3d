@@ -1,6 +1,13 @@
 <template>
   <div class="hello" ref="canvasBox">
-    <canvas class="webgl" ref="webglDom" @mousemove="mouseMove"></canvas>
+    <canvas
+      class="webgl"
+      ref="webglDom"
+      :width="canvasWidth"
+      :height="canvasHeight"
+      @mousemove="mouseMove"
+    ></canvas>
+    <div class="tooltip" ref="toolTip">显示我</div>
   </div>
 </template>
 
@@ -20,6 +27,10 @@ import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass.js";
 import { BloomPass } from "three/examples/jsm/postprocessing/BloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
+import {
+  CSS2DRenderer,
+  CSS2DObject,
+} from "three/examples/jsm/renderers/CSS2DRenderer.js";
 // import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 const axiosPre = "http://172.16.20.33:8087";
 let renderer,
@@ -38,7 +49,10 @@ let renderer,
   selectedNode,
   currentModel,
   activeObjects,
-  mouseDown;
+  mouseDown,
+  startTime,
+  toolDivLabel,
+  labelRenderer;
 let mouseX = 0;
 let rotateStart = new THREE.Vector2();
 export default {
@@ -117,30 +131,31 @@ export default {
       showLine: "yes",
       guiParams: {},
       result: {},
+      canvasWidth: 0,
+      canvasHeight: 0,
       // outlinePass: null,
     };
   },
   created() {},
-  async mounted() {
-    try {
-      this.result = await this.getTotalData();
-      this.formatData();
-      this.initStats();
-      this.colorTool = new THREE.Color();
-      this.createRaycaster();
-      this.initRenderer();
-      this.createGroupOfAllModel();
-
-      this.effect();
-      // this.createModel();
-      // this.addControler();
-      this.animate();
-      // this.showAxesHelper();
-      this.initGUI();
-    } catch (err) {
-      console.log(err);
-    }
-
+  mounted() {
+    // try {
+    //   this.result = await this.getTotalData();
+    //   this.formatData();
+    //   this.initStats();
+    //   this.colorTool = new THREE.Color();
+    //   this.createRaycaster();
+    //   // let width = this.$refs.canvasBox.clientWidth;
+    //   // let height = this.$refs.canvasBox.clientHeight;
+    //   // this.canvasWidth = width;
+    //   // this.canvasHeight = height;
+    //   // console.log("width", width);
+    //   // console.log("width", height);
+    //   // this.initRenderer(width, height);
+    //   // this.showAxesHelper();
+    //   // this.initGUI();
+    // } catch (err) {
+    //   console.log(err);
+    // }
     // addListener();
   },
   methods: {
@@ -162,6 +177,7 @@ export default {
         showLine: true,
         openEvent: false,
         reset: false,
+        nodeId: "",
       };
       gui.add(this.params, "fov", 0, 180).onChange((fov) => {
         camera.setFocalLength(fov);
@@ -187,7 +203,7 @@ export default {
           "ability",
         ])
         .onChange((type) => {
-          this.modelType = type;
+          // this.modelType = type;
           this.changeCluster(type);
         });
       gui.add(this.params, "showLine").onChange((showLine) => {
@@ -218,26 +234,54 @@ export default {
           this.resetToDefaultStyle();
         }
       });
+      const nodeIds = [];
+      for (let [key, value] of this.nodeDatas) {
+        value.forEach((node) => {
+          nodeIds.push(node.relationId);
+        });
+      }
+      gui.add(this.params, "nodeId", nodeIds).onChange((id) => {
+        this.highlightEvent(id);
+      });
+      console.log("nodeIds", nodeIds);
       gui.open();
     },
-    initRenderer() {
-      scene = new THREE.Scene();
-      renderer = new THREE.WebGLRenderer({
-        canvas: this.$refs.webglDom,
-        antialias: true,
-        alpha: true,
-      });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      this.initCamera();
-      this.initLight();
-      window.addEventListener("resize", this.onWindowResize);
-      renderer.domElement.addEventListener(
-        "mousedown",
-        this.mouseDownFunc,
-        true
-      );
-      renderer.domElement.addEventListener("mouseup", this.mouseUpFunc, true);
-      // document.body.appendChild(renderer.domElement);
+    async initRenderer(width, height) {
+      try {
+        console.log("initRenderer");
+        this.result = await this.getTotalData();
+        console.log("result", this.result);
+        this.formatData();
+        // this.initStats();
+        this.colorTool = new THREE.Color();
+        this.createRaycaster();
+        scene = new THREE.Scene();
+        renderer = new THREE.WebGLRenderer({
+          canvas: this.$refs.webglDom,
+          antialias: true,
+          alpha: true,
+        });
+        renderer.setSize(width, height);
+        this.initCamera(width, height);
+        this.initLight();
+        window.addEventListener("resize", this.onWindowResize);
+        renderer.domElement.addEventListener(
+          "mousedown",
+          this.mouseDownFunc,
+          true
+        );
+        renderer.domElement.addEventListener("mouseup", this.mouseUpFunc, true);
+        renderer.domElement.addEventListener("click", this.mouseClick);
+        this.createGroupOfAllModel();
+        this.createLabelRender();
+        // this.createToolTiplayer({ x: 0, y: 0, z: 0 });
+        this.effect(width, height);
+        // this.createModel();
+        // this.addControler();
+        this.animate();
+      } catch (err) {
+        console.error(err);
+      }
     },
     initLight() {
       // const light = new THREE.AmbientLight(0xffffff);
@@ -259,13 +303,8 @@ export default {
       dirLight.position.set(10, 10, 10);
       scene.add(dirLight);
     },
-    initCamera() {
-      camera = new THREE.PerspectiveCamera(
-        45,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
+    initCamera(width, height) {
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
       camera.position.z = 0.27;
       camera.position.x = 2;
       camera.position.y = 2;
@@ -355,8 +394,10 @@ export default {
       const texture = new THREE.CanvasTexture(textCanvas);
       const material = new THREE.SpriteMaterial({
         map: texture,
+        alphaTest: 0.5,
         transparent: true,
         depthTest: false,
+        depthWrite: false,
       });
       const textMesh = new THREE.Sprite(material);
 
@@ -498,8 +539,8 @@ export default {
           targetModel.position.y,
           groupOfTargetModel.position.z
         );
-        console.log("startPoint", startPoint);
-        console.log("endPoint", endPoint);
+        // console.log("startPoint", startPoint);
+        // console.log("endPoint", endPoint);
         // sourceModel.getWorldPosition(startPoint);
         // targetModel.getWorldPosition(endPoint);
         // startPoint = [sourceModel.position.x,sourceModel.y,groupOfSourceModel.z];
@@ -507,6 +548,7 @@ export default {
         let lineModel = this.createLine(startPoint, endPoint, edge);
         groupOfAllModels.add(lineModel);
       });
+      this.highlightText();
     },
     combineModel(
       nodeColor,
@@ -743,6 +785,7 @@ export default {
       group.name = `group_${config.relationId}`;
       group.add(textMesh);
       this.defaultBoll.push(group);
+      this.createToolTiplayer(group);
       return group;
     },
     // 升级版球
@@ -849,6 +892,7 @@ export default {
       //     }
       //   })
       // }
+      this.modelType = cluster;
       this.resetToDefaultStyle();
       if (cluster === "all") {
         scene.traverse((object) => {
@@ -897,18 +941,18 @@ export default {
       }
     },
     // 后期处理-高亮
-    effect() {
+    effect(width, height) {
       // debugger;
       composer = new EffectComposer(renderer);
       const renderPass = new RenderPass(scene, camera);
       // const bloomPass = new BloomPass(
-      //   new THREE.Vector2(window.innerWidth, window.innerHeight),
+      //   new THREE.Vector2(width, height),
       //   1.5,
       //   0.4,
       //   0.85
       // );
       outlinePass = new OutlinePass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        new THREE.Vector2(width, height),
         scene,
         camera
       );
@@ -920,10 +964,7 @@ export default {
       outlinePass.visibleEdgeColor.set(0xff4ecfff);
       outlinePass.hiddenEdgeColor.set(0x00ffff);
       effectFXAA = new ShaderPass(FXAAShader);
-      effectFXAA.uniforms["resolution"].value.set(
-        1 / window.innerWidth,
-        1 / window.innerHeight
-      );
+      effectFXAA.uniforms["resolution"].value.set(1 / width, 1 / height);
       composer.addPass(effectFXAA);
       // outlinePass.clear = true;
       // var ssaaRenderPass = new SSAARenderPass(scene, camera);
@@ -953,9 +994,10 @@ export default {
     },
     mouseClick(event) {
       event.preventDefault();
-      if (this.modelType != "all") {
-        return;
-      }
+
+      // if (this.modelType != "all") {
+      //   return;
+      // }
 
       activeObjects = { edgeIds: [], nodeIds: [] };
       if (!camera) {
@@ -963,8 +1005,22 @@ export default {
       }
       console.log("点击事件");
       // 将鼠标坐标归一化
-      this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      console.log("event.clientX", event);
+      console.log("left", this.$refs.canvasBox.getBoundingClientRect().left);
+      console.log("render.clientWidth", this.$refs.canvasBox.clientWidth);
+      console.log("render.clientHeight", this.$refs.canvasBox.clientHeight);
+      this.mouse.x =
+        ((event.clientX - this.$refs.canvasBox.getBoundingClientRect().left) /
+          this.$refs.canvasBox.clientWidth) *
+          2 -
+        1;
+      this.mouse.y =
+        -(
+          (event.clientY - this.$refs.canvasBox.getBoundingClientRect().top) /
+          this.$refs.canvasBox.clientHeight
+        ) *
+          2 +
+        1;
       // 设置射线起点为鼠标位置，射线的方向为相机视角方向
       raycaster.setFromCamera(this.mouse, camera);
       // 计算射线相交
@@ -973,62 +1029,7 @@ export default {
         return item.object.name && item.object.name.includes("boll");
       });
       if (ifBoll) {
-        selectedNode = ifBoll.object;
-        let selectedNodeGroup = selectedNode.parent;
-        let { x, y } = selectedNodeGroup.position;
-        let selectedNodeOfTypeGroup = selectedNodeGroup.parent;
-        let { z } = selectedNodeOfTypeGroup.position;
-        currentModel.position.x = x;
-        currentModel.position.y = y;
-        currentModel.position.z = z;
-        let currentModelColor = this.nodeColors.get(
-          selectedNode.userData.config.cluster
-        );
-        currentModel.traverseVisible((child) => {
-          if (child.type === "Mesh") {
-            child.material.color.set(new THREE.Color(currentModelColor));
-            child.material.emissive.set(new THREE.Color(currentModelColor));
-          }
-        });
-        currentModel.visible = true;
-        // currentModel.material.color.set(currentModelColor);
-        groupOfAllModels.traverseVisible((object) => {
-          if (object.name.includes("boll")) {
-            object.material.opacity = 0.3;
-            object.material.color.set(0x000);
-          }
-          if (object.name.includes("inner")) {
-            object.material.opacity = 0.2;
-          }
-          if (object.name.includes("line")) {
-            object.material.opacity = 0.2;
-          }
-        });
-        this.getRelevanceModels(selectedNode).then((data) => {
-          activeObjects = data;
-          let { edgeIds, nodeIds } = activeObjects;
-          edgeIds.forEach((edgeId) => {
-            let activeEdge = groupOfAllModels.getObjectByName(`line_${edgeId}`);
-            if (activeEdge) {
-              activeEdge.material.opacity = 1;
-              activeEdge.material.color.set("#38B7FF");
-              activeEdge.material.lineWidth = 4;
-            }
-          });
-          nodeIds.forEach((nodeId) => {
-            let activeOuterBoll = groupOfAllModels.getObjectByName(
-              `boll_${nodeId}`
-            );
-            if (activeOuterBoll) {
-              activeOuterBoll.material.opacity = 0.1;
-              activeOuterBoll.material.color.set(0xffffff);
-              let innerObjectName = `inner_${nodeId}`;
-              let innerObject =
-                groupOfAllModels.getObjectByName(innerObjectName);
-              innerObject.material.opacity = 1;
-            }
-          });
-        });
+        this.highlightEvent(ifBoll);
       } else {
         // scene.traverseVisible((object) => {
         //   if (object.name.includes("boll")) {
@@ -1043,8 +1044,95 @@ export default {
         //   }
         // });
       }
+    },
+    highlightEvent(val) {
+      if (typeof val === "object") {
+        console.log("val", typeof val);
+        selectedNode = val.object;
+      } else {
+        selectedNode = groupOfAllModels.getObjectByName(`boll_${val}`);
+      }
+      let cluster = selectedNode.userData.config.cluster;
+      console.log("cluster", cluster);
+      console.log("modelType", this.modelType);
+      if (this.modelType !== "all") {
+        if (!this.modelType.includes(cluster)) {
+          console.log("return");
+          return;
+        }
+      }
+      let selectedNodeGroup = selectedNode.parent;
+      let { x, y } = selectedNodeGroup.position;
+      let selectedNodeOfTypeGroup = selectedNodeGroup.parent;
+      let { z } = selectedNodeOfTypeGroup.position;
+      currentModel.visible = true;
+      currentModel.position.x = x;
+      currentModel.position.y = y;
+      currentModel.position.z = z;
+      let currentModelColor = this.nodeColors.get(
+        selectedNode.userData.config.cluster
+      );
+      currentModel.traverseVisible((child) => {
+        if (child.type === "Mesh") {
+          child.material.color.set(new THREE.Color(currentModelColor));
+          child.material.emissive.set(new THREE.Color(currentModelColor));
+        }
+      });
 
-      // selectedNode = null;
+      // currentModel.material.color.set(currentModelColor);
+      groupOfAllModels.traverseVisible((object) => {
+        if (object.name.includes("boll")) {
+          object.material.opacity = 0.3;
+          object.material.color.set(0x000);
+        }
+        if (object.name.includes("inner")) {
+          object.material.opacity = 0.2;
+        }
+        if (object.name.includes("line")) {
+          object.material.opacity = 0.2;
+        }
+      });
+      this.getRelevanceModels(selectedNode).then((data) => {
+        activeObjects = data;
+        let { edgeIds, nodeIds } = activeObjects;
+        edgeIds.forEach((edgeId) => {
+          let activeEdge = groupOfAllModels.getObjectByName(`line_${edgeId}`);
+          if (activeEdge) {
+            activeEdge.material.opacity = 1;
+            activeEdge.material.color.set("#38B7FF");
+            activeEdge.material.lineWidth = 4;
+          }
+        });
+        nodeIds.forEach((nodeId) => {
+          let activeOuterBoll = groupOfAllModels.getObjectByName(
+            `boll_${nodeId}`
+          );
+          if (activeOuterBoll) {
+            activeOuterBoll.material.opacity = 0.1;
+            activeOuterBoll.material.color.set(0xffffff);
+            let innerObjectName = `inner_${nodeId}`;
+            let innerObject = groupOfAllModels.getObjectByName(innerObjectName);
+            innerObject.material.opacity = 1;
+          }
+        });
+      });
+    },
+    highlightText() {
+      groupOfAllModels.traverseVisible((object) => {
+        if (object.name.includes(`text`)) {
+          let label = object.name.split("_")[2];
+          // console.log("label", label);
+          const canvas = object.material.map.image;
+          const context = canvas.getContext("2d");
+          const lineHeight = 36;
+          context.fillStyle = "#f4ecff";
+          // context.fillStyle = "#ff00ff";
+          context.fillText(label, 0, lineHeight / 2);
+          const texture = new THREE.CanvasTexture(canvas);
+          object.material.map = texture;
+          object.material.needsUpdate = true;
+        }
+      });
     },
     // getRelevanceModels(model, type) {
     //   if (!model || activeObjects.has(model)) {
@@ -1097,10 +1185,18 @@ export default {
       if (!camera) {
         return;
       }
-      // console.log("进入事件");
-      // 将鼠标坐标归一化
-      this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      this.mouse.x =
+        ((event.clientX - this.$refs.canvasBox.getBoundingClientRect().left) /
+          this.$refs.canvasBox.clientWidth) *
+          2 -
+        1;
+      this.mouse.y =
+        -(
+          (event.clientY - this.$refs.canvasBox.getBoundingClientRect().top) /
+          this.$refs.canvasBox.clientHeight
+        ) *
+          2 +
+        1;
       // 设置射线起点为鼠标位置，射线的方向为相机视角方向
       raycaster.setFromCamera(this.mouse, camera);
       // 计算射线相交
@@ -1108,55 +1204,180 @@ export default {
       let ifBoll = intersects.find((item) => {
         return item.object.name && item.object.name.includes("boll");
       });
-      if (mouseDown) {
+      // let ifToolDiv = intersects.find((item) => {
+      //   if (item.object.name && item.object.name === "toolbox") {
+      //     console.log("aaaa", item.object);
+      //   }
+      // });
+      // console.log("ifToolDiv", ifToolDiv);
+      // if (mouseDown) {
+      // } else {
+
+      if (ifBoll) {
+        let { label, cluster, relationId } = ifBoll.object.userData.config;
+
+        groupOfAllModels.traverseVisible((object) => {
+          if (object.name === `text_${cluster}_${label}`) {
+            const canvas = object.material.map.image;
+            const context = canvas.getContext("2d");
+            const lineHeight = 36;
+            context.fillStyle = "#f4ecff";
+            context.fillText(label, 0, lineHeight / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            object.material.map = texture;
+            object.material.needsUpdate = true;
+            // console.log("text", object);
+            // bollTextModel = object;
+          }
+          // if (object.name === "toolbox") {
+          //   object.visible = false;
+          // }
+        });
+        composer.addPass(outlinePass);
+        outlinePass.selectedObjects = [ifBoll.object];
+        document.body.style.cursor = "pointer";
+        // console.log("object", ifBoll.object);
+        ifBoll.object.parent.children.forEach((child) => {
+          if (child.name === "toolbox") {
+            child.visible = true;
+          }
+        });
+        // let position = new THREE.Vector3();
+
+        // ifBoll.object.getWorldPosition(position);
+        // let { x, y, z } = position;
+        // // console.log("x,y,z", x, y, z);
+        // toolDivLabel.position.set(x, y, z + 0.025 * 2);
+        // toolDivLabel.visible = true;
+        // let { x, y } = this.transterPositionTo2D(
+        //   ifBoll.object.position,
+        //   ifBoll.object
+        // );
+        // console.log(ifBoll);
+        // let p = this.computescreenspaceboundingbox(ifBoll.object);
+        // console.log("P", P);
+        // this.$emit("moveOnNode", {
+        //   x,
+        //   y: y - 20,
+        //   nodeId: relationId,
+        //   isOnNode: true,
+        // });
       } else {
-        if (ifBoll) {
-          let bollTextModel;
-          // let label = ifBoll.object.userData.config.label;
-          let { label, cluster } = ifBoll.object.userData.config;
+        // this.$emit("moveOnNode", {
+        //   x: 0,
+        //   y: 0,
+        //   nodeId: null,
+        //   isOnNode: false,
+        // });
+        let lastSelectedObject = outlinePass.selectedObjects[0];
+        if (lastSelectedObject) {
+          let { label, cluster } = lastSelectedObject.userData.config;
           groupOfAllModels.traverseVisible((object) => {
             if (object.name === `text_${cluster}_${label}`) {
               const canvas = object.material.map.image;
               const context = canvas.getContext("2d");
               const lineHeight = 36;
-              context.fillStyle = "#f4ecff";
+              context.fillStyle = "#ffffff";
               context.fillText(label, 0, lineHeight / 2);
               const texture = new THREE.CanvasTexture(canvas);
               object.material.map = texture;
               object.material.needsUpdate = true;
               // console.log("text", object);
-              bollTextModel = object;
             }
           });
-          // console.log(bollTextModel);
-          composer.addPass(outlinePass);
-          outlinePass.selectedObjects = [ifBoll.object];
-          document.body.style.cursor = "pointer";
-        } else {
-          let lastSelectedObject = outlinePass.selectedObjects[0];
-          if (lastSelectedObject) {
-            let { label, cluster } = lastSelectedObject.userData.config;
-            groupOfAllModels.traverseVisible((object) => {
-              if (object.name === `text_${cluster}_${label}`) {
-                const canvas = object.material.map.image;
-                const context = canvas.getContext("2d");
-                const lineHeight = 36;
-                context.fillStyle = "#ffffff";
-                context.fillText(label, 0, lineHeight / 2);
-                const texture = new THREE.CanvasTexture(canvas);
-                object.material.map = texture;
-                object.material.needsUpdate = true;
-                // console.log("text", object);
-              }
-            });
-          }
-
-          composer.removePass(outlinePass);
-          // outlinePass.selectedObjects = [];
-          // this.defaultBoll = [];
-          document.body.style.cursor = "default";
         }
+
+        composer.removePass(outlinePass);
+        document.body.style.cursor = "default";
+        groupOfAllModels.traverse((object) => {
+          if (object.name && object.name === "toolbox") {
+            if (!object.userData.show) {
+              object.visible = false;
+            }
+          }
+        });
+        // if (!ifToolDiv) {
+        //   toolDivLabel.visible = false;
+        // } else {
+        //   toolDivLabel.visible = true;
+        // }
       }
+
+      // }
+    },
+    transterPositionTo2D(position, obj) {
+      // let { x, y, z } = position;
+      let vector = new THREE.Vector3();
+      vector.setFromMatrixPosition(obj.matrixWorld).project(camera);
+      // vector.project(camera);
+      let offsetX = Math.round(
+        ((vector.x + 1) * renderer.domElement.width) / 2
+      );
+      let offsetY = Math.round(
+        (-(vector.y - 1) * renderer.domElement.height) / 2
+      );
+      return { x: offsetX, y: offsetY };
+    },
+    computescreenspaceboundingbox(mesh) {
+      var vertices = [new THREE.Vector3(0, 0, 0.025)];
+      var vertex = new THREE.Vector3();
+      var min = new THREE.Vector3(1, 1, 1);
+      var max = new THREE.Vector3(-1, -1, -1);
+
+      for (var i = 0; i < vertices.length; i++) {
+        var vertexworldcoord = vertex
+          .copy(vertices[i])
+          .applymatrix4(mesh.matrixworld);
+        var vertexscreenspace = vertexworldcoord.project(camera);
+        min.min(vertexscreenspace);
+        max.max(vertexscreenspace);
+      }
+
+      // return new THREE.box2(min, max);
+      return { x: min, y: max };
+    },
+    createToolTiplayer(modelObj) {
+      const toolDiv = document.createElement("div");
+      toolDiv.className = "toolBox";
+      toolDiv.textContent = "去分析";
+      toolDiv.style =
+        "background:rgba(0,0,0,0.2);color:#fff;border:1px solid red;width:60px;height:60px;text-align:center;line-height:50px;font-size:12px;cursor:pointer;";
+      toolDiv.style.backgroundImage = `url(/static/tooltip.png)`;
+      toolDiv.style.backgroundSize = "100% 100%";
+      const toolDivLabel = new CSS2DObject(toolDiv);
+      toolDiv.style.pointerEvents = "auto";
+
+      modelObj.layers.enableAll();
+      let { x, y, z } = modelObj.position;
+      // console.log("toolDivLabel", toolDivLabel);
+      // console.log("center", toolDivLabel.center);
+      toolDivLabel.position.set(x, y, z + 0.07);
+      toolDivLabel.visible = false;
+      // toolDivLabel.center.set(0, 1);
+      modelObj.add(toolDivLabel);
+      toolDivLabel.layers.set(0);
+      toolDivLabel.name = "toolbox";
+      toolDiv.addEventListener("click", () => {
+        alert("click");
+      });
+      toolDiv.addEventListener("mouseenter", () => {
+        toolDivLabel.visible = true;
+        toolDivLabel.userData.show = true;
+      });
+      toolDiv.addEventListener("mouseleave", () => {
+        toolDivLabel.visible = false;
+        toolDivLabel.userData.show = false;
+      });
+    },
+    createLabelRender() {
+      labelRenderer = new CSS2DRenderer();
+      const width = this.$refs.canvasBox.clientWidth;
+      const height = this.$refs.canvasBox.clientHeight;
+      labelRenderer.setSize(width, height);
+      labelRenderer.domElement.style.position = "absolute";
+      labelRenderer.domElement.style.top = "0px";
+      // labelRenderer.domElement.style.zIndex = "0";
+      this.$refs.canvasBox.appendChild(labelRenderer.domElement);
     },
     mouseMove1(event) {
       event.preventDefault();
@@ -1170,6 +1391,7 @@ export default {
       }
     },
     mouseDownFunc(event) {
+      startTime = Date.now();
       event.preventDefault();
       mouseDown = true;
       mouseX = event.clientX;
@@ -1177,6 +1399,11 @@ export default {
       renderer.domElement.addEventListener("mousemove", this.mouseMove1, false);
     },
     mouseUpFunc(event) {
+      const endTime = Date.now();
+      const time = endTime - startTime;
+      if (time < 200) {
+        this.resetToDefaultStyle();
+      }
       event.preventDefault();
       mouseDown = false;
       renderer.domElement.removeEventListener("mousemove", this.mouseMove1);
@@ -1187,7 +1414,7 @@ export default {
         window.cancelAnimationFrame(animateId);
       }
 
-      stats.update();
+      stats && stats.update();
       if (this.group) {
         // this.group.rotation.z += 0.005;
         // this.model.rotation.y += 0.01;
@@ -1203,7 +1430,8 @@ export default {
       //   composer.render();
       // }
 
-      renderer.render(scene, camera);
+      renderer && renderer.render(scene, camera);
+      labelRenderer && labelRenderer.render(scene, camera);
       animateId = requestAnimationFrame(this.animate);
     },
     showAxesHelper() {
@@ -1215,14 +1443,16 @@ export default {
       controler.update();
     },
     onWindowResize() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-
+      const width = this.$refs.canvasBox.clientWidth;
+      const height = this.$refs.canvasBox.clientHeight;
+      this.canvasWidth = width;
+      this.canvasHeight = height;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
 
       renderer && renderer.setSize(width, height);
       composer && composer.setSize(width, height);
+      labelRenderer && labelRenderer.setSize(width, height);
       effectFXAA.uniforms["resolution"].value.set(1 / width, 1 / height);
     },
     resetToDefaultStyle() {
@@ -1255,6 +1485,12 @@ export default {
       return coords;
     },
     disposeScene() {
+      // 清除事件监听器和动画循环
+      window.removeEventListener("resize", this.onWindowResize);
+      renderer.domElement.removeEventListener("mouseup", this.mouseUpFunc);
+      renderer.domElement.removeEventListener("mousedown", this.mouseDownFunc);
+      renderer.domElement.removeEventListener("mousemove", this.mouseMove);
+      renderer.domElement.removeEventListener("mouseclick", this.mouseClick);
       // 清除场景中的所有对象
       while (scene.children.length > 0) {
         var object = scene.children[0];
@@ -1272,11 +1508,9 @@ export default {
 
       composer = null;
       THREE.Cache.clear();
-      // 清除事件监听器和动画循环
-      window.removeEventListener("resize", this.onWindowResize);
 
-      gui.close();
-      stats.end();
+      gui && gui.close();
+      stats && stats.end();
 
       if (animateId) {
         window.cancelAnimationFrame(animateId);
@@ -1287,7 +1521,7 @@ export default {
   beforeDestroy() {
     // debugger;
     console.log("beforeDestroy");
-    this.disposeScene();
+    // this.disposeScene();
   },
   // watch: {
   //   modelType: {
@@ -1307,12 +1541,31 @@ export default {
   background: url("../assets/app-bg.png") center center;
   width: 100%;
   height: 100%;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
 }
 .webgl {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+.tooltip {
+  width: 100px;
+  height: 20px;
   position: fixed;
-  left: 0;
-  top: 0;
-  outline: none;
-  background: transparent;
+  border: 1px solid red;
+  color: #fff;
+}
+.toolBox {
+  width: 120px !important;
+  height: 70px;
+  font-size: 12px;
+  color: "#fff" !important;
+  font-weight: 500;
+  font-family: "PingFang-SC";
 }
 </style>
