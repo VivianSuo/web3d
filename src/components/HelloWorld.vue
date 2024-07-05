@@ -392,7 +392,7 @@ export default {
       const texture = new THREE.CanvasTexture(textCanvas);
       const material = new THREE.SpriteMaterial({
         map: texture,
-        alphaTest: 0.5,
+        alphaTest: 0,
         transparent: true,
         depthTest: false,
         depthWrite: false,
@@ -537,12 +537,6 @@ export default {
           targetModel.position.y,
           groupOfTargetModel.position.z
         );
-        // console.log("startPoint", startPoint);
-        // console.log("endPoint", endPoint);
-        // sourceModel.getWorldPosition(startPoint);
-        // targetModel.getWorldPosition(endPoint);
-        // startPoint = [sourceModel.position.x,sourceModel.y,groupOfSourceModel.z];
-        // endPoint = targetModel.position;
         let lineModel = this.createLine(startPoint, endPoint, edge);
         groupOfAllModels.add(lineModel);
       });
@@ -689,40 +683,33 @@ export default {
       );
       let pointsArr = curve.getPoints(50);
       const geometry = new THREE.LatheGeometry(pointsArr, 100);
+      const material = new THREE.MeshLambertMaterial({
+        color: this.colorTool.set(color),
+        emissive: this.colorTool.set(color),
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity,
+      });
+      foundationModel = new THREE.Mesh(geometry, material);
+      foundationModel.rotation.x = -Math.PI / 2;
+      foundationModel.position.set(0, 0, xRadius);
+      foundationModel.name = "foundationModel";
+      groupOfAllModels.add(foundationModel);
       // const geometry = new THREE.CircleGeometry(0.5, 100);
-      const textureLoader = new THREE.TextureLoader();
+      // const textureLoader = new THREE.TextureLoader();
       // const doorColorTexture = textureLoader.load("../assets/bigCircle.png");
-      const doorColorTexture = textureLoader.load(
-        "/static/foundation.png",
-        (texture) => {
-          // console.log("loader", texture);
-          // console.log("doorColorTexture", doorColorTexture);
-          // const uvs = [0, 1, 1, 1, 0, 0, 1, 0];
-          // geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-          const material = new THREE.MeshLambertMaterial({
-            // map: texture,
-            // color: "0x1E457A",
-            color: this.colorTool.set(color),
-            emissive: this.colorTool.set(color),
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity,
-          });
-          // texture.center.set(0, 0);
-          foundationModel = new THREE.Mesh(geometry, material);
+      // const doorColorTexture = textureLoader.load(
+      //   "/static/foundation.png",
+      //   (texture) => {
 
-          foundationModel.rotation.x = -Math.PI / 2;
-          foundationModel.position.set(0, 0, xRadius);
-          foundationModel.name = "foundationModel";
-          groupOfAllModels.add(foundationModel);
-        },
-        (e) => {
-          // console.log("onprogress");
-        },
-        (err) => {
-          console.log("error", err);
-        }
-      );
+      //   },
+      //   (e) => {
+      //     // console.log("onprogress");
+      //   },
+      //   (err) => {
+      //     console.log("error", err);
+      //   }
+      // );
     },
     // 中轴
     createCenterAxis() {
@@ -992,21 +979,16 @@ export default {
     },
     mouseClick(event) {
       event.preventDefault();
-
-      // if (this.modelType != "all") {
-      //   return;
-      // }
-
       activeObjects = { edgeIds: [], nodeIds: [] };
       if (!camera) {
         return;
       }
-      console.log("点击事件");
+      // console.log("点击事件");
       // 将鼠标坐标归一化
-      console.log("event.clientX", event);
-      console.log("left", this.$refs.canvasBox.getBoundingClientRect().left);
-      console.log("render.clientWidth", this.$refs.canvasBox.clientWidth);
-      console.log("render.clientHeight", this.$refs.canvasBox.clientHeight);
+      // console.log("event.clientX", event);
+      // console.log("left", this.$refs.canvasBox.getBoundingClientRect().left);
+      // console.log("render.clientWidth", this.$refs.canvasBox.clientWidth);
+      // console.log("render.clientHeight", this.$refs.canvasBox.clientHeight);
       this.mouse.x =
         ((event.clientX - this.$refs.canvasBox.getBoundingClientRect().left) /
           this.$refs.canvasBox.clientWidth) *
@@ -1049,17 +1031,16 @@ export default {
     },
     highlightEvent(val) {
       if (typeof val === "object") {
-        console.log("val", typeof val);
+        // console.log("val", typeof val);
         selectedNode = val.object;
       } else {
         selectedNode = groupOfAllModels.getObjectByName(`boll_${val}`);
       }
       let cluster = selectedNode.userData.config.cluster;
-      console.log("cluster", cluster);
-      console.log("modelType", this.modelType);
+      // console.log("cluster", cluster);
+      // console.log("modelType", this.modelType);
       if (this.modelType !== "all") {
         if (!this.modelType.includes(cluster)) {
-          console.log("return");
           return;
         }
       }
@@ -1292,8 +1273,8 @@ export default {
       return { x: min, y: max };
     },
     create2Dlayer(modelObj) {
-      let { cluster, label } = modelObj.userData.config;
-      console.log("modelObj", modelObj);
+      // let { cluster, label } = modelObj.userData.config;
+      // console.log("modelObj", modelObj);
       const toolDiv = document.createElement("div");
       toolDiv.className = "toolBox";
       toolDiv.textContent = "去分析";
@@ -1363,7 +1344,7 @@ export default {
       mouseDown = true;
       mouseX = event.clientX;
       rotateStart.set(event.clientX, event.clientY);
-      renderer.domElement.addEventListener("mousemove", this.mouseMove1, false);
+      renderer.domElement.addEventListener("mousemove", this.mouseMove1, true);
     },
     mouseUpFunc(event) {
       const endTime = Date.now();
@@ -1487,7 +1468,7 @@ export default {
 
   beforeDestroy() {
     // debugger;
-    console.log("beforeDestroy");
+    // console.log("beforeDestroy");
     // this.disposeScene();
   },
   // watch: {
