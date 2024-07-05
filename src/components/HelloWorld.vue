@@ -141,7 +141,7 @@ export default {
     // try {
     //   this.result = await this.getTotalData();
     //   this.formatData();
-    //   this.initStats();
+    this.initStats();
     //   this.colorTool = new THREE.Color();
     //   this.createRaycaster();
     //   // let width = this.$refs.canvasBox.clientWidth;
@@ -274,9 +274,7 @@ export default {
         renderer.domElement.addEventListener("click", this.mouseClick);
         this.createGroupOfAllModel();
         this.createLabelRender();
-        // this.createToolTiplayer({ x: 0, y: 0, z: 0 });
         this.effect(width, height);
-        // this.createModel();
         // this.addControler();
         this.animate();
       } catch (err) {
@@ -785,7 +783,7 @@ export default {
       group.name = `group_${config.relationId}`;
       group.add(textMesh);
       this.defaultBoll.push(group);
-      this.createToolTiplayer(group);
+      this.create2Dlayer(group);
       return group;
     },
     // 升级版球
@@ -1026,7 +1024,11 @@ export default {
       // 计算射线相交
       const intersects = raycaster.intersectObjects(scene.children, true);
       let ifBoll = intersects.find((item) => {
-        return item.object.name && item.object.name.includes("boll");
+        return (
+          item.object.name &&
+          (item.object.name.includes("boll") ||
+            item.object.name.includes("text"))
+        );
       });
       if (ifBoll) {
         this.highlightEvent(ifBoll);
@@ -1204,18 +1206,8 @@ export default {
       let ifBoll = intersects.find((item) => {
         return item.object.name && item.object.name.includes("boll");
       });
-      // let ifToolDiv = intersects.find((item) => {
-      //   if (item.object.name && item.object.name === "toolbox") {
-      //     console.log("aaaa", item.object);
-      //   }
-      // });
-      // console.log("ifToolDiv", ifToolDiv);
-      // if (mouseDown) {
-      // } else {
-
       if (ifBoll) {
         let { label, cluster, relationId } = ifBoll.object.userData.config;
-
         groupOfAllModels.traverseVisible((object) => {
           if (object.name === `text_${cluster}_${label}`) {
             const canvas = object.material.map.image;
@@ -1229,9 +1221,6 @@ export default {
             // console.log("text", object);
             // bollTextModel = object;
           }
-          // if (object.name === "toolbox") {
-          //   object.visible = false;
-          // }
         });
         composer.addPass(outlinePass);
         outlinePass.selectedObjects = [ifBoll.object];
@@ -1242,33 +1231,7 @@ export default {
             child.visible = true;
           }
         });
-        // let position = new THREE.Vector3();
-
-        // ifBoll.object.getWorldPosition(position);
-        // let { x, y, z } = position;
-        // // console.log("x,y,z", x, y, z);
-        // toolDivLabel.position.set(x, y, z + 0.025 * 2);
-        // toolDivLabel.visible = true;
-        // let { x, y } = this.transterPositionTo2D(
-        //   ifBoll.object.position,
-        //   ifBoll.object
-        // );
-        // console.log(ifBoll);
-        // let p = this.computescreenspaceboundingbox(ifBoll.object);
-        // console.log("P", P);
-        // this.$emit("moveOnNode", {
-        //   x,
-        //   y: y - 20,
-        //   nodeId: relationId,
-        //   isOnNode: true,
-        // });
       } else {
-        // this.$emit("moveOnNode", {
-        //   x: 0,
-        //   y: 0,
-        //   nodeId: null,
-        //   isOnNode: false,
-        // });
         let lastSelectedObject = outlinePass.selectedObjects[0];
         if (lastSelectedObject) {
           let { label, cluster } = lastSelectedObject.userData.config;
@@ -1286,7 +1249,6 @@ export default {
             }
           });
         }
-
         composer.removePass(outlinePass);
         document.body.style.cursor = "default";
         groupOfAllModels.traverse((object) => {
@@ -1296,14 +1258,7 @@ export default {
             }
           }
         });
-        // if (!ifToolDiv) {
-        //   toolDivLabel.visible = false;
-        // } else {
-        //   toolDivLabel.visible = true;
-        // }
       }
-
-      // }
     },
     transterPositionTo2D(position, obj) {
       // let { x, y, z } = position;
@@ -1336,24 +1291,24 @@ export default {
       // return new THREE.box2(min, max);
       return { x: min, y: max };
     },
-    createToolTiplayer(modelObj) {
+    create2Dlayer(modelObj) {
+      let { cluster, label } = modelObj.userData.config;
+      console.log("modelObj", modelObj);
       const toolDiv = document.createElement("div");
       toolDiv.className = "toolBox";
       toolDiv.textContent = "去分析";
       toolDiv.style =
-        "background:rgba(0,0,0,0.2);color:#fff;border:1px solid red;width:60px;height:60px;text-align:center;line-height:50px;font-size:12px;cursor:pointer;";
+        "color:#fff;width:60px;height:60px;text-align:center;line-height:50px;font-size:12px;cursor:pointer;";
       toolDiv.style.backgroundImage = `url(/static/tooltip.png)`;
       toolDiv.style.backgroundSize = "100% 100%";
       const toolDivLabel = new CSS2DObject(toolDiv);
       toolDiv.style.pointerEvents = "auto";
-
       modelObj.layers.enableAll();
       let { x, y, z } = modelObj.position;
       // console.log("toolDivLabel", toolDivLabel);
       // console.log("center", toolDivLabel.center);
       toolDivLabel.position.set(x, y, z + 0.07);
       toolDivLabel.visible = false;
-      // toolDivLabel.center.set(0, 1);
       modelObj.add(toolDivLabel);
       toolDivLabel.layers.set(0);
       toolDivLabel.name = "toolbox";
@@ -1368,6 +1323,18 @@ export default {
         toolDivLabel.visible = false;
         toolDivLabel.userData.show = false;
       });
+      // const labelDiv = document.createElement("div");
+      // labelDiv.className = "nodeLabel";
+      // labelDiv.textContent = label;
+      // labelDiv.style =
+      //   "color:#fff;width:200px;height:60px;text-align:center;line-height:50px;font-size:16px;cursor:pointer;";
+      // const labelDivLabel = new CSS2DObject(labelDiv);
+      // labelDiv.style.pointerEvents = "auto";
+      // labelDivLabel.position.set(x, y, z - 0.08);
+      // // labelDivLabel.visible = true;
+      // modelObj.add(labelDivLabel);
+      // labelDivLabel.layers.set(1);
+      // labelDivLabel.name = `text_${cluster}_${label}`;
     },
     createLabelRender() {
       labelRenderer = new CSS2DRenderer();
