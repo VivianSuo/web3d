@@ -133,15 +133,26 @@ export default {
       result: {},
       canvasWidth: 0,
       canvasHeight: 0,
+
       // outlinePass: null,
     };
   },
+  // props: {
+  //   width: {
+  //     required: true,
+  //     type: Number,
+  //   },
+  //   height: {
+  //     required: true,
+  //     type: Number,
+  //   },
+  // },
   created() {},
   mounted() {
     // try {
     //   this.result = await this.getTotalData();
     //   this.formatData();
-    this.initStats();
+    // this.initStats();
     //   this.colorTool = new THREE.Color();
     //   this.createRaycaster();
     //   // let width = this.$refs.canvasBox.clientWidth;
@@ -151,7 +162,6 @@ export default {
     //   // console.log("width", width);
     //   // console.log("width", height);
     //   // this.initRenderer(width, height);
-    //   // this.showAxesHelper();
     //   // this.initGUI();
     // } catch (err) {
     //   console.log(err);
@@ -277,6 +287,7 @@ export default {
         this.effect(width, height);
         // this.addControler();
         this.animate();
+        // this.showAxesHelper();
       } catch (err) {
         console.error(err);
       }
@@ -384,6 +395,8 @@ export default {
       textCanvas.width = canvasWidth;
       textCanvas.height = canvasHeight;
       context.font = `${lineHeight / 2}px 'sans-serif'`;
+      context.strokeStyle = "#fff";
+      // context.strokeText(label, 0, lineHeight / 2);
       context.fillStyle = "#ffffff";
       context.textBaseline = "middle";
       context.textAlign = "left";
@@ -558,10 +571,12 @@ export default {
         let nodeModelGroup = this.createNestBoll(
           nodeColor,
           nodeRadius,
-          nodeObj
+          nodeObj,
+          circleRadius
         );
         let { x, y } = xyCoords[index];
         nodeModelGroup.position.set(x, y, 0);
+        this.create2Dlayer(nodeModelGroup, circleRadius);
         nodesModel.push(nodeModelGroup);
       });
 
@@ -739,7 +754,7 @@ export default {
       groupOfAllModels.add(centerAxis);
     },
     // 默认球效果
-    createNestBoll(color, radius, config) {
+    createNestBoll(color, radius, config, circleRadius) {
       const group = new THREE.Group();
       const geometry = new THREE.SphereGeometry(radius, 32, 16);
       const innerMaterial = new THREE.MeshPhongMaterial({
@@ -770,7 +785,7 @@ export default {
       group.name = `group_${config.relationId}`;
       group.add(textMesh);
       this.defaultBoll.push(group);
-      this.create2Dlayer(group);
+
       return group;
     },
     // 升级版球
@@ -1206,10 +1221,21 @@ export default {
         composer.addPass(outlinePass);
         outlinePass.selectedObjects = [ifBoll.object];
         document.body.style.cursor = "pointer";
-        // console.log("object", ifBoll.object);
         ifBoll.object.parent.children.forEach((child) => {
           if (child.name === "toolbox") {
+            let worldPosition = new THREE.Vector3();
+            ifBoll.object.getWorldPosition(worldPosition);
+            let { x, y, z } = worldPosition;
+            let toolboxZ = 0;
+            if (x < 0 && y < 0) {
+              toolboxZ = 0.13;
+            } else if (x > 0 && y > 0) {
+              toolboxZ = 0.07;
+            } else {
+              toolboxZ = 0.09;
+            }
             child.visible = true;
+            child.position.z = toolboxZ;
           }
         });
       } else {
@@ -1272,9 +1298,10 @@ export default {
       // return new THREE.box2(min, max);
       return { x: min, y: max };
     },
-    create2Dlayer(modelObj) {
-      // let { cluster, label } = modelObj.userData.config;
+    create2Dlayer(modelObj, circleRadius) {
+      let { cluster, relationId } = modelObj.userData.config;
       // console.log("modelObj", modelObj);
+      // console.log("cluster", cluster, relationId);
       const toolDiv = document.createElement("div");
       toolDiv.className = "toolBox";
       toolDiv.textContent = "去分析";
@@ -1286,15 +1313,22 @@ export default {
       toolDiv.style.pointerEvents = "auto";
       modelObj.layers.enableAll();
       let { x, y, z } = modelObj.position;
-      // console.log("toolDivLabel", toolDivLabel);
-      // console.log("center", toolDivLabel.center);
-      toolDivLabel.position.set(x, y, z + 0.07);
+      let toolboxZ = 0;
+      if (x < 0 && y < 0) {
+        toolboxZ = z + 0.13;
+      } else if (x > 0 && y > 0) {
+        toolboxZ = z + 0.07;
+      } else {
+        toolboxZ = z + 0.09;
+      }
+      toolDivLabel.position.set(0, 0, toolboxZ);
+
       toolDivLabel.visible = false;
       modelObj.add(toolDivLabel);
       toolDivLabel.layers.set(0);
       toolDivLabel.name = "toolbox";
       toolDiv.addEventListener("click", () => {
-        alert("click");
+        this.analysis(cluster, relationId);
       });
       toolDiv.addEventListener("mouseenter", () => {
         toolDivLabel.visible = true;
@@ -1316,6 +1350,10 @@ export default {
       // modelObj.add(labelDivLabel);
       // labelDivLabel.layers.set(1);
       // labelDivLabel.name = `text_${cluster}_${label}`;
+    },
+    analysis(cluster, relationId) {
+      // console.log("analysis", cluster, relationId);
+      this.$emit("analysis", cluster, relationId);
     },
     createLabelRender() {
       labelRenderer = new CSS2DRenderer();
@@ -1435,21 +1473,30 @@ export default {
     disposeScene() {
       // 清除事件监听器和动画循环
       window.removeEventListener("resize", this.onWindowResize);
-      renderer.domElement.removeEventListener("mouseup", this.mouseUpFunc);
-      renderer.domElement.removeEventListener("mousedown", this.mouseDownFunc);
-      renderer.domElement.removeEventListener("mousemove", this.mouseMove);
-      renderer.domElement.removeEventListener("mouseclick", this.mouseClick);
+      renderer &&
+        renderer.domElement.removeEventListener("mouseup", this.mouseUpFunc);
+      renderer &&
+        renderer.domElement.removeEventListener(
+          "mousedown",
+          this.mouseDownFunc
+        );
+      renderer &&
+        renderer.domElement.removeEventListener("mousemove", this.mouseMove);
+      renderer &&
+        renderer.domElement.removeEventListener("mouseclick", this.mouseClick);
       // 清除场景中的所有对象
-      while (scene.children.length > 0) {
-        var object = scene.children[0];
-        if (object.geometry) object.geometry.dispose();
-        if (object.material) object.material.dispose();
-        if (object.texture) object.texture.dispose();
-        scene.remove(object);
+      if (scene) {
+        while (scene.children.length > 0) {
+          var object = scene.children[0];
+          if (object.geometry) object.geometry.dispose();
+          if (object.material) object.material.dispose();
+          if (object.texture) object.texture.dispose();
+          scene.remove(object);
+        }
       }
 
       // 清除渲染器和相机
-      renderer.dispose();
+      renderer && renderer.dispose();
       renderer.domElement = null;
       camera = null;
       outlinePass = null;
@@ -1465,21 +1512,31 @@ export default {
       }
     },
   },
-
-  beforeDestroy() {
-    // debugger;
-    // console.log("beforeDestroy");
-    // this.disposeScene();
-  },
   // watch: {
-  //   modelType: {
-  //     handler: (type) => {
-  //       console.log("curModelType", type);
-  //       if (type === "all") {
+  //   width: {
+  //     handler: function (newVal) {
+  //       if (!renderer && newVal) {
+  //         this.initRenderer(this.width, this.height);
+  //       }
+  //     },
+  //   },
+  //   height: {
+  //     handler: function (newVal) {
+  //       if (!renderer && newVal) {
+  //         this.initRenderer(this.width, this.height);
   //       }
   //     },
   //   },
   // },
+  beforeUpdate() {
+    console.log("inner beforeUpdate");
+    console.log("renderer", renderer);
+  },
+  beforeDestroy() {
+    // debugger;
+    console.log("inner beforeDestroy");
+    // this.disposeScene();
+  },
 };
 </script>
 

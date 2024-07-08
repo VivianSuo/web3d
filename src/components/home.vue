@@ -24,17 +24,17 @@
     <div class="rightBox" ref="rightBox">
       <canvas-box
         v-show="show"
-        @moveOnNode="moveOnNode"
         ref="canvasBox"
+        @analysis="analysis"
       ></canvas-box>
-      <div
+      <!-- <div
         v-show="showTool"
         class="toolBox"
         :style="{ left: `${toolLeft}px`, top: `${toolTop - 50}px` }"
         ref="toolBox"
       >
         去分析
-      </div>
+      </div> -->
     </div>
   </div>
 </template>
@@ -58,7 +58,8 @@ export default {
         "ability:8",
       ],
       nodeId: "",
-      showTool: false,
+      // showTool: false,
+
       toolLeft: 0,
       toolTop: 0,
     };
@@ -78,19 +79,30 @@ export default {
     changeNode() {
       this.$refs.canvasBox.highlightEvent(this.nodeId);
     },
-    moveOnNode({ x, y, nodeId, isOnNode }) {
-      if (isOnNode) {
-        console.log("x", x);
-        console.log("y", y);
-        console.log("nodeId", nodeId);
-        this.toolLeft = x;
-        this.toolTop = y;
-        this.showTool = true;
-      } else {
-        console.log("out");
-        this.showTool = false;
-      }
+    // moveOnNode({ x, y, nodeId, isOnNode }) {
+    //   if (isOnNode) {
+    //     console.log("x", x);
+    //     console.log("y", y);
+    //     console.log("nodeId", nodeId);
+    //     this.toolLeft = x;
+    //     this.toolTop = y;
+    //     this.showTool = true;
+    //   } else {
+    //     console.log("out");
+    //     this.showTool = false;
+    //   }
+    // },
+    analysis(type, id) {
+      console.log("type_id", type, id);
     },
+  },
+  beforeUpdate() {
+    console.log("beforeUpdate");
+    // if (!renderer) {
+    //   let width = this.$refs.rightBox.clientWidth;
+    //   let height = this.$refs.rightBox.clientHeight;
+    //   this.$refs.canvasBox.initRenderer(width, height);
+    // }
   },
   beforeDestroy() {
     console.log("destroy");
