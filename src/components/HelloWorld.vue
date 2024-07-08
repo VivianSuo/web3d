@@ -1067,9 +1067,7 @@ export default {
       currentModel.position.x = x;
       currentModel.position.y = y;
       currentModel.position.z = z;
-      let currentModelColor = this.nodeColors.get(
-        selectedNode.userData.config.cluster
-      );
+      let currentModelColor = this.nodeColors.get(cluster);
       currentModel.traverseVisible((child) => {
         if (child.type === "Mesh") {
           child.material.color.set(new THREE.Color(currentModelColor));
@@ -1535,7 +1533,7 @@ export default {
   beforeDestroy() {
     // debugger;
     console.log("inner beforeDestroy");
-    // this.disposeScene();
+    this.disposeScene();
   },
 };
 </script>

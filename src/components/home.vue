@@ -106,7 +106,6 @@ export default {
   },
   beforeDestroy() {
     console.log("destroy");
-    this.$refs.canvasBox.disposeScene();
   },
 };
 </script>
