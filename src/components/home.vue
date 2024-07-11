@@ -45,7 +45,7 @@ export default {
   data() {
     return {
       show: true,
-      modelType: ["all", "proGroup", "project", "subsystem", "ability"],
+      modelType: ["all", "proGroup", "project", "subsystem", "ability"], // 类型
       type: "all",
       nodeIds: [
         "proGroup:7",
@@ -71,7 +71,7 @@ export default {
     console.log("mounted");
   },
   methods: {
-    // 切换显示内容类型
+    // 切换类型
     changeType() {
       this.$refs.canvasBox.changeCluster(this.type);
     },

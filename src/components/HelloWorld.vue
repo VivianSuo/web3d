@@ -12,7 +12,7 @@
 </template>
 
 <script>
-// import result from "../mock/data";
+import result from "../mock/data";
 // 记得及时dispose相应的对象来释放内存占用。
 import * as THREE from "three";
 import * as Stats from "stats.js";
@@ -31,6 +31,10 @@ import {
   CSS2DRenderer,
   CSS2DObject,
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import {
+  CSS3DRenderer,
+  CSS3DSprite,
+} from "three/examples/jsm/renderers/CSS3DRenderer.js";
 // import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 const axiosPre = "http://172.16.20.33:8087";
 let renderer,
@@ -52,7 +56,8 @@ let renderer,
   mouseDown,
   startTime,
   toolDivLabel,
-  labelRenderer;
+  labelRenderer,
+  labelRenderOf3d;
 let mouseX = 0;
 let rotateStart = new THREE.Vector2();
 export default {
@@ -259,7 +264,8 @@ export default {
     async initRenderer(width, height) {
       try {
         console.log("initRenderer");
-        this.result = await this.getTotalData();
+        // this.result = await this.getTotalData();
+        this.result = result.data;
         console.log("result", this.result);
         this.formatData();
         // this.initStats();
@@ -284,6 +290,7 @@ export default {
         renderer.domElement.addEventListener("click", this.mouseClick);
         this.createGroupOfAllModel();
         this.createLabelRender();
+        this.create3DRender();
         this.effect(width, height);
         // this.addControler();
         this.animate();
@@ -312,6 +319,21 @@ export default {
       dirLight.position.set(10, 10, 10);
       scene.add(dirLight);
     },
+    // initCamera(width, height) {
+    //   camera = new THREE.OrthographicCamera(
+    //     -width / 1000,
+    //     width / 1000,
+    //     height / 1000,
+    //     -height / 1000,
+    //     -1,
+    //     10
+    //   );
+    //   camera.position.z = 0.27;
+    //   camera.position.x = 2;
+    //   camera.position.y = 2;
+    //   camera.up.set(0, 0, 1);
+    //   camera.lookAt(scene.position);
+    // },
     initCamera(width, height) {
       camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
       camera.position.z = 0.27;
@@ -409,7 +431,9 @@ export default {
         transparent: true,
         depthTest: false,
         depthWrite: false,
+        // blending: THREE.AdditiveBlending,
       });
+      texture.needsUpdate = true;
       const textMesh = new THREE.Sprite(material);
 
       let { x, y, z } = position;
@@ -421,6 +445,23 @@ export default {
       );
       textMesh.name = `text_${cluster}_${label}`;
       return textMesh;
+    },
+    addTextby3dSprite(obj, position) {
+      const label = obj.userData.config.label;
+      const cluster = obj.userData.config.cluster;
+      const labelDiv = document.createElement("div");
+      labelDiv.className = "label";
+      labelDiv.innerHTML = label;
+      labelDiv.style =
+        "color:#fff;font-size:26px;background-color:transparent;width:350px;height:30px;line-height:30px;text-align:center;border-radius:10px;";
+      const sprite = new CSS3DSprite(labelDiv);
+      sprite.depthTest = true;
+      sprite.depthWrite = true;
+      sprite.scale.set(0.001, 0.001, 0.001);
+      let { x, y, z } = position;
+      sprite.position.set(x, y, z);
+      sprite.name = `text_${cluster}_${label}`;
+      return sprite;
     },
     textAnimate() {
       requestAnimationFrame(this.textAnimate);
@@ -553,7 +594,7 @@ export default {
         let lineModel = this.createLine(startPoint, endPoint, edge);
         groupOfAllModels.add(lineModel);
       });
-      this.highlightText();
+      // this.highlightText();
     },
     combineModel(
       nodeColor,
@@ -577,6 +618,7 @@ export default {
         let { x, y } = xyCoords[index];
         nodeModelGroup.position.set(x, y, 0);
         this.create2Dlayer(nodeModelGroup, circleRadius);
+        // this.create3Dlayer(nodeModelGroup, nodeRadius);
         nodesModel.push(nodeModelGroup);
       });
 
@@ -762,6 +804,8 @@ export default {
         color: new THREE.Color(color),
         transparent: true,
         opacity: 1,
+        depthTest: true,
+        depthWrite: true,
         // emissiveIntensity: 0.5,
       });
       const innerSphere = new THREE.Mesh(geometry, innerMaterial);
@@ -771,6 +815,8 @@ export default {
         color: new THREE.Color(0xffffff),
         transparent: true,
         opacity: 0.2,
+        depthTest: true,
+        depthWrite: true,
       });
       const outerSphere = new THREE.Mesh(outerGeometry, outerMaterial);
       // group.position.set(0, 1, 0);
@@ -780,8 +826,13 @@ export default {
       group.add(innerSphere);
       group.add(outerSphere);
       group.userData.config = config;
+      let isBackbone = config.isBackbone;
+      if (isBackbone) {
+        this.create3Dlayer(group, radius);
+      }
       let textPosition = { x: 0, y: 0, z: -radius * 2 - 0.01 };
-      const textMesh = this.addTextbyCanvas(group, textPosition);
+      // const textMesh = this.addTextbyCanvas(group, textPosition);
+      const textMesh = this.addTextby3dSprite(group, textPosition);
       group.name = `group_${config.relationId}`;
       group.add(textMesh);
       this.defaultBoll.push(group);
@@ -896,7 +947,9 @@ export default {
       this.resetToDefaultStyle();
       if (cluster === "all") {
         scene.traverse((object) => {
-          object.visible = true;
+          if (object.name !== "toolbox") {
+            object.visible = true;
+          }
         });
         currentModel.visible = false;
       } else {
@@ -939,6 +992,52 @@ export default {
         });
         // let selectedEdges =
       }
+    },
+    createBackbone(group, groupBollRadius) {
+      const radius = 0.01;
+      const height = 0.05;
+      const itemHeight = radius * 2 + height;
+      // 存放样条曲线的点集
+      const points = [];
+      //上半部分四分之一圆弧
+      for (let i = Math.PI / 2; i > 0; i -= 0.3) {
+        points.push(
+          new THREE.Vector2(
+            Math.cos(i) * radius,
+            Math.sin(i) * radius + height / 2
+          )
+        );
+      }
+      //中间直线
+      for (let i = height / 2; i > -height / 2; i -= height) {
+        points.push(new THREE.Vector2(radius, i));
+      }
+      //下半部分四分之一圆弧
+      for (let i = 0; i <= Math.PI / 2; i += 0.3) {
+        points.push(
+          new THREE.Vector2(
+            Math.cos(i) * radius,
+            -Math.sin(i) * radius - height / 2
+          )
+        );
+      }
+
+      // 补充一个点，去掉底部的小洞
+      points.push(new THREE.Vector2(0, -radius - height / 2));
+      console.log(points);
+      const geometry = new THREE.LatheGeometry(points);
+      // const pngec = textureLoader.load(pngUrl);
+      const material = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 1,
+        vertexColors: false,
+        // map: pngec,
+        blending: THREE.AdditiveBlending,
+        color: new THREE.Color(0xff00ff),
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(groupBollRadius, groupBollRadius, groupBollRadius);
+      group.add(mesh);
     },
     // 后期处理-高亮
     effect(width, height) {
@@ -1051,7 +1150,9 @@ export default {
       } else {
         selectedNode = groupOfAllModels.getObjectByName(`boll_${val}`);
       }
-      let cluster = selectedNode.userData.config.cluster;
+      let cluster = selectedNode.userData.config
+        ? selectedNode.userData.config.cluster
+        : "";
       // console.log("cluster", cluster);
       // console.log("modelType", this.modelType);
       if (this.modelType !== "all") {
@@ -1204,14 +1305,14 @@ export default {
         let { label, cluster, relationId } = ifBoll.object.userData.config;
         groupOfAllModels.traverseVisible((object) => {
           if (object.name === `text_${cluster}_${label}`) {
-            const canvas = object.material.map.image;
-            const context = canvas.getContext("2d");
-            const lineHeight = 36;
-            context.fillStyle = "#f4ecff";
-            context.fillText(label, 0, lineHeight / 2);
-            const texture = new THREE.CanvasTexture(canvas);
-            object.material.map = texture;
-            object.material.needsUpdate = true;
+            // const canvas = object.material.map.image;
+            // const context = canvas.getContext("2d");
+            // const lineHeight = 36;
+            // context.fillStyle = "#f4ecff";
+            // context.fillText(label, 0, lineHeight / 2);
+            // const texture = new THREE.CanvasTexture(canvas);
+            // object.material.map = texture;
+            // object.material.needsUpdate = true;
             // console.log("text", object);
             // bollTextModel = object;
           }
@@ -1242,14 +1343,14 @@ export default {
           let { label, cluster } = lastSelectedObject.userData.config;
           groupOfAllModels.traverseVisible((object) => {
             if (object.name === `text_${cluster}_${label}`) {
-              const canvas = object.material.map.image;
-              const context = canvas.getContext("2d");
-              const lineHeight = 36;
-              context.fillStyle = "#ffffff";
-              context.fillText(label, 0, lineHeight / 2);
-              const texture = new THREE.CanvasTexture(canvas);
-              object.material.map = texture;
-              object.material.needsUpdate = true;
+              // const canvas = object.material.map.image;
+              // const context = canvas.getContext("2d");
+              // const lineHeight = 36;
+              // context.fillStyle = "#ffffff";
+              // context.fillText(label, 0, lineHeight / 2);
+              // const texture = new THREE.CanvasTexture(canvas);
+              // object.material.map = texture;
+              // object.material.needsUpdate = true;
               // console.log("text", object);
             }
           });
@@ -1349,6 +1450,20 @@ export default {
       // labelDivLabel.layers.set(1);
       // labelDivLabel.name = `text_${cluster}_${label}`;
     },
+    create3Dlayer(modelObj, radius) {
+      const backboneDiv = document.createElement("div");
+      backboneDiv.className = "backbone";
+      backboneDiv.innerHTML = "骨干";
+      backboneDiv.style =
+        "color:#fff;font-size:22px;background-color:#ff00ff;width:50px;height:30px;line-height:30px;text-align:center;border-radius:10px;";
+      const sprite = new CSS3DSprite(backboneDiv);
+      sprite.depthTest = true;
+      sprite.depthWrite = true;
+      sprite.scale.set(0.001, 0.001, 0.001);
+      sprite.position.set(radius, radius, radius);
+      sprite.name = "backbone";
+      modelObj.add(sprite);
+    },
     analysis(cluster, relationId) {
       // console.log("analysis", cluster, relationId);
       this.$emit("analysis", cluster, relationId);
@@ -1360,8 +1475,19 @@ export default {
       labelRenderer.setSize(width, height);
       labelRenderer.domElement.style.position = "absolute";
       labelRenderer.domElement.style.top = "0px";
+      labelRenderer.domElement.style.pointerEvents = "none";
       // labelRenderer.domElement.style.zIndex = "0";
       this.$refs.canvasBox.appendChild(labelRenderer.domElement);
+    },
+    create3DRender() {
+      labelRenderOf3d = new CSS3DRenderer();
+      const width = this.$refs.canvasBox.clientWidth;
+      const height = this.$refs.canvasBox.clientHeight;
+      labelRenderOf3d.setSize(width, height);
+      labelRenderOf3d.domElement.style.position = "absolute";
+      labelRenderOf3d.domElement.style.top = "0px";
+      labelRenderOf3d.domElement.style.pointerEvents = "none";
+      this.$refs.canvasBox.appendChild(labelRenderOf3d.domElement);
     },
     mouseMove1(event) {
       event.preventDefault();
@@ -1413,9 +1539,10 @@ export default {
       // if (composer) {
       //   composer.render();
       // }
-
+      labelRenderOf3d && labelRenderOf3d.render(scene, camera);
       renderer && renderer.render(scene, camera);
       labelRenderer && labelRenderer.render(scene, camera);
+
       animateId = requestAnimationFrame(this.animate);
     },
     showAxesHelper() {
@@ -1437,6 +1564,7 @@ export default {
       renderer && renderer.setSize(width, height);
       composer && composer.setSize(width, height);
       labelRenderer && labelRenderer.setSize(width, height);
+      labelRenderOf3d && labelRenderOf3d.setSize(width, height);
       effectFXAA.uniforms["resolution"].value.set(1 / width, 1 / height);
     },
     resetToDefaultStyle() {
@@ -1540,6 +1668,15 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
+* {
+  -moz-user-select: none;
+  /* Safari 和 欧朋 */
+  -webkit-user-select: none;
+  /* IE10+ and Edge */
+  -ms-user-select: none;
+  /* Standard syntax 标准语法(谷歌) */
+  user-select: none;
+}
 .hello {
   background: url("../assets/app-bg.png") center center;
   width: 100%;
@@ -1554,7 +1691,7 @@ export default {
   padding: 0;
   margin: 0;
   position: relative;
-  z-index: 1;
+  /* z-index: 1; */
 }
 .tooltip {
   width: 100px;
