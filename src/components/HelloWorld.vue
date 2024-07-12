@@ -401,6 +401,7 @@ export default {
       });
     },
     addTextbyCanvas(obj, position) {
+      const relationId = obj.userData.config.relationId;
       const label = obj.userData.config.label;
       const cluster = obj.userData.config.cluster;
       const textCanvas = document.createElement("canvas");
@@ -443,10 +444,11 @@ export default {
         canvasHeight / lineHeight / 18,
         0
       );
-      textMesh.name = `text_${cluster}_${label}`;
+      textMesh.name = `text_${cluster}_${relationId}`;
       return textMesh;
     },
     addTextby3dSprite(obj, position) {
+      const relationId = obj.userData.config.relationId;
       const label = obj.userData.config.label;
       const cluster = obj.userData.config.cluster;
       const labelDiv = document.createElement("div");
@@ -460,7 +462,7 @@ export default {
       sprite.scale.set(0.001, 0.001, 0.001);
       let { x, y, z } = position;
       sprite.position.set(x, y, z);
-      sprite.name = `text_${cluster}_${label}`;
+      sprite.name = `text_${cluster}_${relationId}`;
       return sprite;
     },
     textAnimate() {
@@ -990,7 +992,20 @@ export default {
             // selectedEdges.push(edge)
           });
         });
-        // let selectedEdges =
+        scene.traverse((object) => {
+          if (object.name.includes("text_")) {
+            console.log("object", object);
+            object.visible = false;
+            if (object.name.includes(`text_${cluster}`)) {
+              object.visible = true;
+            }
+          } else if (object.name.includes("backbone")) {
+            object.visible = false;
+            if (object.name.includes(`backbone_${cluster}`)) {
+              object.visible = true;
+            }
+          }
+        });
       }
     },
     createBackbone(group, groupBollRadius) {
@@ -1188,6 +1203,12 @@ export default {
         if (object.name.includes("line")) {
           object.material.opacity = 0.2;
         }
+        if (object.name.includes("text")) {
+          object.element.style.opacity = 0.2;
+        }
+        if (object.name.includes("backbone")) {
+          object.element.style.opacity = 0.2;
+        }
       });
       this.getRelevanceModels(selectedNode).then((data) => {
         activeObjects = data;
@@ -1205,11 +1226,22 @@ export default {
             `boll_${nodeId}`
           );
           if (activeOuterBoll) {
+            let { cluster, isBackbone } = activeOuterBoll.userData.config;
             activeOuterBoll.material.opacity = 0.1;
             activeOuterBoll.material.color.set(0xffffff);
             let innerObjectName = `inner_${nodeId}`;
             let innerObject = groupOfAllModels.getObjectByName(innerObjectName);
             innerObject.material.opacity = 1;
+            let textObject = groupOfAllModels.getObjectByName(
+              `text_${cluster}_${nodeId}`
+            );
+            textObject.element.style.opacity = 1;
+            if (isBackbone) {
+              let backboneObject = groupOfAllModels.getObjectByName(
+                `backbone_${cluster}_${nodeId}`
+              );
+              backboneObject.element.style.opacity = 1;
+            }
           }
         });
       });
@@ -1301,7 +1333,7 @@ export default {
       let ifBoll = intersects.find((item) => {
         return item.object.name && item.object.name.includes("boll");
       });
-      if (ifBoll) {
+      if (ifBoll && ifBoll.visible) {
         let { label, cluster, relationId } = ifBoll.object.userData.config;
         groupOfAllModels.traverseVisible((object) => {
           if (object.name === `text_${cluster}_${label}`) {
@@ -1451,6 +1483,7 @@ export default {
       // labelDivLabel.name = `text_${cluster}_${label}`;
     },
     create3Dlayer(modelObj, radius) {
+      let { cluster, relationId } = modelObj.userData.config;
       const backboneDiv = document.createElement("div");
       backboneDiv.className = "backbone";
       backboneDiv.innerHTML = "骨干";
@@ -1461,7 +1494,7 @@ export default {
       sprite.depthWrite = true;
       sprite.scale.set(0.001, 0.001, 0.001);
       sprite.position.set(radius, radius, radius);
-      sprite.name = "backbone";
+      sprite.name = `backbone_${cluster}_${relationId}`;
       modelObj.add(sprite);
     },
     analysis(cluster, relationId) {
@@ -1578,6 +1611,12 @@ export default {
         }
         if (object.name.includes("line")) {
           object.material.opacity = 0.2;
+        }
+        if (object.name.includes("text")) {
+          object.element.style.opacity = 1;
+        }
+        if (object.name.includes("backbone")) {
+          object.element.style.opacity = 1;
         }
         currentModel.visible = false;
       });
