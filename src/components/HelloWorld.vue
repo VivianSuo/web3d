@@ -1333,22 +1333,22 @@ export default {
       let ifBoll = intersects.find((item) => {
         return item.object.name && item.object.name.includes("boll");
       });
-      if (ifBoll && ifBoll.visible) {
-        let { label, cluster, relationId } = ifBoll.object.userData.config;
-        groupOfAllModels.traverseVisible((object) => {
-          if (object.name === `text_${cluster}_${label}`) {
-            // const canvas = object.material.map.image;
-            // const context = canvas.getContext("2d");
-            // const lineHeight = 36;
-            // context.fillStyle = "#f4ecff";
-            // context.fillText(label, 0, lineHeight / 2);
-            // const texture = new THREE.CanvasTexture(canvas);
-            // object.material.map = texture;
-            // object.material.needsUpdate = true;
-            // console.log("text", object);
-            // bollTextModel = object;
-          }
-        });
+      if (ifBoll && ifBoll.object.parent.parent.visible) {
+        // let { label, cluster, relationId } = ifBoll.object.userData.config;
+        // groupOfAllModels.traverseVisible((object) => {
+        // if (object.name === `text_${cluster}_${label}`) {
+        // const canvas = object.material.map.image;
+        // const context = canvas.getContext("2d");
+        // const lineHeight = 36;
+        // context.fillStyle = "#f4ecff";
+        // context.fillText(label, 0, lineHeight / 2);
+        // const texture = new THREE.CanvasTexture(canvas);
+        // object.material.map = texture;
+        // object.material.needsUpdate = true;
+        // console.log("text", object);
+        // bollTextModel = object;
+        // }
+        // });
         composer.addPass(outlinePass);
         outlinePass.selectedObjects = [ifBoll.object];
         document.body.style.cursor = "pointer";
@@ -1366,34 +1366,36 @@ export default {
               toolboxZ = 0.09;
             }
             child.visible = true;
+            child.userData.show = true;
             child.position.z = toolboxZ;
           }
         });
       } else {
-        let lastSelectedObject = outlinePass.selectedObjects[0];
-        if (lastSelectedObject) {
-          let { label, cluster } = lastSelectedObject.userData.config;
-          groupOfAllModels.traverseVisible((object) => {
-            if (object.name === `text_${cluster}_${label}`) {
-              // const canvas = object.material.map.image;
-              // const context = canvas.getContext("2d");
-              // const lineHeight = 36;
-              // context.fillStyle = "#ffffff";
-              // context.fillText(label, 0, lineHeight / 2);
-              // const texture = new THREE.CanvasTexture(canvas);
-              // object.material.map = texture;
-              // object.material.needsUpdate = true;
-              // console.log("text", object);
-            }
-          });
-        }
+        // let lastSelectedObject = outlinePass.selectedObjects[0];
+        // if (lastSelectedObject) {
+        // let { label, cluster } = lastSelectedObject.userData.config;
+        // groupOfAllModels.traverseVisible((object) => {
+        // if (object.name === `text_${cluster}_${label}`) {
+        // const canvas = object.material.map.image;
+        // const context = canvas.getContext("2d");
+        // const lineHeight = 36;
+        // context.fillStyle = "#ffffff";
+        // context.fillText(label, 0, lineHeight / 2);
+        // const texture = new THREE.CanvasTexture(canvas);
+        // object.material.map = texture;
+        // object.material.needsUpdate = true;
+        // console.log("text", object);
+        // }
+        // });
+        // }
         composer.removePass(outlinePass);
         document.body.style.cursor = "default";
         groupOfAllModels.traverse((object) => {
           if (object.name && object.name === "toolbox") {
-            if (!object.userData.show) {
-              object.visible = false;
-            }
+            // if (!object.userData.show) {
+            object.visible = false;
+            object.userData.show = false;
+            // }
           }
         });
       }
@@ -1462,8 +1464,10 @@ export default {
         this.analysis(cluster, relationId);
       });
       toolDiv.addEventListener("mouseenter", () => {
-        toolDivLabel.visible = true;
-        toolDivLabel.userData.show = true;
+        if (modelObj.visible) {
+          toolDivLabel.visible = true;
+          toolDivLabel.userData.show = true;
+        }
       });
       toolDiv.addEventListener("mouseleave", () => {
         toolDivLabel.visible = false;
